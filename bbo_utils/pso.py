@@ -3,6 +3,7 @@ from .optimizer import Optimizer
 from .tasks import OptimizationTaskPool, rastrigin
 import matplotlib.pyplot as plt
 import random
+import torch
 
 class ParticleSwarmOptimization(Optimizer):
     def __init__(self, task, num_particles=30, num_iterations=100, w=0.5, c1=1.0, c2=1.0):
@@ -20,11 +21,30 @@ class ParticleSwarmOptimization(Optimizer):
         self.global_best_position = None
         self.global_best_score = np.inf
 
+    def _convert_to_numpy(self, tensor):
+        """Helper method to convert tensor to numpy value."""
+        if isinstance(tensor, torch.Tensor):
+            if tensor.is_cuda:
+                tensor = tensor.cpu()
+            tensor = tensor.detach().numpy()
+            if isinstance(tensor, np.ndarray):
+                tensor = float(tensor)
+        return tensor
+
     def initialize_particles(self, lower_bound, upper_bound):
         self.particles = np.random.uniform(lower_bound, upper_bound, (self.num_particles, len(lower_bound)))
         self.velocities = np.random.uniform(-1, 1, (self.num_particles, len(lower_bound)))
         self.personal_best_positions = np.copy(self.particles)
-        self.personal_best_scores = np.array([self.fitness_function(p) for p in self.particles])
+        
+        # Convert particles to tensor for fitness evaluation
+        particles_tensor = torch.from_numpy(self.particles).float()
+        if torch.cuda.is_available():
+            particles_tensor = particles_tensor.cuda()
+        
+        # Evaluate fitness for all particles
+        self.personal_best_scores = np.array([
+            self._convert_to_numpy(self.fitness_function(p)) for p in particles_tensor
+        ])
 
         # Initialize global best
         best_idx = np.argmin(self.personal_best_scores)
@@ -44,7 +64,12 @@ class ParticleSwarmOptimization(Optimizer):
             # Ensure particles stay within bounds
             self.particles[i] = np.clip(self.particles[i], lower_bound, upper_bound)
 
-            current_score = self.fitness_function(self.particles[i])
+            # Convert particle to tensor for fitness evaluation
+            particle_tensor = torch.from_numpy(self.particles[i]).float()
+            if torch.cuda.is_available():
+                particle_tensor = particle_tensor.cuda()
+            
+            current_score = self._convert_to_numpy(self.fitness_function(particle_tensor))
             if current_score < self.personal_best_scores[i]:
                 self.personal_best_positions[i] = self.particles[i]
                 self.personal_best_scores[i] = current_score

@@ -4,6 +4,7 @@ from .tasks import OptimizationTaskPool, rastrigin
 import matplotlib.pyplot as plt
 import random
 from .lshade import LShadeAlgorithm
+import torch
 
 
 class WhaleOptimization(Optimizer):
@@ -12,10 +13,30 @@ class WhaleOptimization(Optimizer):
         self.solver_name = 'WhaleOptimization'
         self.population_size = population_size
 
+    def _convert_to_numpy(self, tensor):
+        """Helper method to convert tensor to numpy value."""
+        if isinstance(tensor, torch.Tensor):
+            if tensor.is_cuda:
+                tensor = tensor.cpu()
+            tensor = tensor.detach().numpy()
+            if isinstance(tensor, np.ndarray):
+                tensor = float(tensor)
+        return tensor
+
     def initialize_population(self, lower_bound, upper_bound):
         """Initialize the population within bounds."""
         self.population = np.random.uniform(lower_bound, upper_bound, (self.population_size, len(lower_bound)))
-        self.fitness = np.array([self.fitness_function(ind) for ind in self.population])
+        
+        # Convert population to tensor for fitness evaluation
+        population_tensor = torch.from_numpy(self.population).float()
+        if torch.cuda.is_available():
+            population_tensor = population_tensor.cuda()
+        
+        # Evaluate fitness for all individuals
+        self.fitness = np.array([
+            self._convert_to_numpy(self.fitness_function(ind)) for ind in population_tensor
+        ])
+        
         self.best_idx = np.argmin(self.fitness)
         self.best_solution = self.population[self.best_idx]
         self.best_objective_function = self.fitness[self.best_idx]
@@ -54,7 +75,12 @@ class WhaleOptimization(Optimizer):
                     self.population[i], self.best_solution, random_agent, a, A, C, p, lower_bound, upper_bound
                 )
 
-                fitness = self.fitness_function(self.population[i])
+                # Convert agent to tensor for fitness evaluation
+                agent_tensor = torch.from_numpy(self.population[i]).float()
+                if torch.cuda.is_available():
+                    agent_tensor = agent_tensor.cuda()
+                
+                fitness = self._convert_to_numpy(self.fitness_function(agent_tensor))
                 if fitness < self.fitness[i]:
                     self.fitness[i] = fitness
 

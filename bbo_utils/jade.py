@@ -8,6 +8,7 @@ from .optimizer import Optimizer
 from .tasks import OptimizationTaskPool, rastrigin
 import matplotlib.pyplot as plt
 import random
+import torch
 
 class JadeAlgorithm(Optimizer):
     def __init__(self, task, population_size=100, c=0.1, p=0.05):
@@ -21,7 +22,17 @@ class JadeAlgorithm(Optimizer):
 
     def initialize_population(self, lower_bound, upper_bound):
         self.population = np.random.uniform(lower_bound, upper_bound, (self.population_size, len(lower_bound)))
-        self.fitness = np.array([self.fitness_function(ind) for ind in self.population])
+        # Convert numpy array to torch tensor for fitness evaluation
+        population_tensor = torch.from_numpy(self.population).float()
+        if torch.cuda.is_available():
+            population_tensor = population_tensor.cuda()
+        
+        # Evaluate fitness and convert back to numpy
+        fitness_tensor = torch.tensor([self.fitness_function(ind) for ind in population_tensor])
+        if torch.cuda.is_available():
+            fitness_tensor = fitness_tensor.cpu()
+        self.fitness = fitness_tensor.numpy()
+        
         self.best_idx = np.argmin(self.fitness)
         self.best_solution = self.population[self.best_idx]
         self.best_objective_function = self.fitness[self.best_idx]

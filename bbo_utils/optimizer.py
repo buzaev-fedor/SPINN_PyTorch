@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time 
+import torch
 
 class Optimizer:
     def __init__(self, task):
@@ -8,7 +9,17 @@ class Optimizer:
         self.best_solution = None
         self.best_objective_function = np.inf
         self.task_name = task['name']
-        self.fitness_function = task['func']
+        
+        # Оборачиваем fitness_function для автоматического преобразования тензоров
+        original_func = task['func']
+        def wrapped_func(x):
+            if isinstance(x, torch.Tensor):
+                if x.is_cuda:
+                    x = x.cpu()
+                x = x.detach().numpy()
+            return original_func(x)
+        self.fitness_function = wrapped_func
+        
         self.bounds = task['bounds']
         self.budget = task['budget']
         self.solver_name = 'Undefined'
@@ -41,24 +52,9 @@ class Optimizer:
             self.best_solution = None
             self.best_objective_function = np.inf
             self.run_minimize()
-            #self.all_histories.append(self.objective_function_history)
             self.best_objective_functions.append(self.best_objective_function)
         end_time = time.time()
         self.elapsed_time = (end_time - start_time)/n_runs
 
-        #self.all_histories = np.array(self.all_histories)
-        #self.mean_history = np.mean(self.all_histories, axis=0)
-        #self.std_history = np.std(self.all_histories, axis=0)
         self.best_mean = np.mean(self.best_objective_functions)
         self.best_std = np.std(self.best_objective_functions)
-        
-        #plt.figure()
-        #plt.errorbar(range(len(self.mean_history)), self.mean_history, yerr=self.std_history, label=self.solver_name + ' Mean with Dispersion')
-        #plt.xlabel('Iterations')
-        #plt.ylabel('Objective Function')
-        #plt.title(f'{self.solver_name}: {self.task_name} (n_runs={n_runs})')
-        #plt.legend()
-        #plt.show()
-
-        #print(f'Best objective function mean: {self.best_mean}')
-        #print(f'Best objective function std: {self.best_std}')

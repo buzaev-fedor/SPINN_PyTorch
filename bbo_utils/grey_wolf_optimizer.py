@@ -7,6 +7,7 @@ import numpy as np
 from .optimizer import Optimizer
 from .tasks import OptimizationTaskPool, rastrigin
 import matplotlib.pyplot as plt
+import torch
 
 class GreyWolfOptimizer(Optimizer):
     def __init__(self, task, num_wolves=30):
@@ -17,6 +18,16 @@ class GreyWolfOptimizer(Optimizer):
         self.alpha = None
         self.beta = None
         self.delta = None
+
+    def _convert_to_numpy(self, tensor):
+        """Helper method to convert tensor to numpy value."""
+        if isinstance(tensor, torch.Tensor):
+            if tensor.is_cuda:
+                tensor = tensor.cpu()
+            tensor = tensor.detach().numpy()
+            if isinstance(tensor, np.ndarray):
+                tensor = float(tensor)
+        return tensor
 
     def initialize_wolves(self, lower_bound, upper_bound):
         dimension = len(lower_bound)
@@ -63,11 +74,21 @@ class GreyWolfOptimizer(Optimizer):
         
         self.num_iterations = self.budget // self.num_wolves
         
+        # Convert alpha to tensor for initial fitness evaluation
+        alpha_tensor = torch.from_numpy(self.alpha).float()
+        if torch.cuda.is_available():
+            alpha_tensor = alpha_tensor.cuda()
         self.best_solution = np.copy(self.alpha)
-        self.best_objective_function = self.fitness_function(self.alpha)
+        self.best_objective_function = self._convert_to_numpy(self.fitness_function(alpha_tensor))
 
         for self.current_iteration in range(self.num_iterations):
-            scores = np.array([self.fitness_function(w) for w in self.wolves])
+            # Convert wolves to tensor for fitness evaluation
+            wolves_tensor = torch.from_numpy(self.wolves).float()
+            if torch.cuda.is_available():
+                wolves_tensor = wolves_tensor.cuda()
+            
+            # Evaluate fitness for all wolves
+            scores = np.array([self._convert_to_numpy(self.fitness_function(w)) for w in wolves_tensor])
             indices = np.argsort(scores)
 
             self.alpha = np.copy(self.wolves[indices[0]])

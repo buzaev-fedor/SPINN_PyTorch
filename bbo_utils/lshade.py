@@ -10,6 +10,7 @@ from .optimizer import Optimizer
 from .tasks import OptimizationTaskPool, rastrigin
 import matplotlib.pyplot as plt
 import random
+import torch
 
 class LShadeAlgorithm(Optimizer):
     def __init__(self, task, population_size=100, c=0.1, p=0.05):
@@ -22,9 +23,29 @@ class LShadeAlgorithm(Optimizer):
         self.p = p  # Proportion of top individuals to use in mutation
         self.archive = []
 
+    def _convert_to_numpy(self, tensor):
+        """Helper method to convert tensor to numpy value."""
+        if isinstance(tensor, torch.Tensor):
+            if tensor.is_cuda:
+                tensor = tensor.cpu()
+            tensor = tensor.detach().numpy()
+            if isinstance(tensor, np.ndarray):
+                tensor = float(tensor)
+        return tensor
+
     def initialize_population(self, lower_bound, upper_bound):
         self.population = np.random.uniform(lower_bound, upper_bound, (self.population_size, len(lower_bound)))
-        self.fitness = np.array([self.fitness_function(ind) for ind in self.population])
+        # Convert numpy array to torch tensor for fitness evaluation
+        population_tensor = torch.from_numpy(self.population).float()
+        if torch.cuda.is_available():
+            population_tensor = population_tensor.cuda()
+        
+        # Evaluate fitness and convert back to numpy
+        fitness_tensor = torch.tensor([self.fitness_function(ind) for ind in population_tensor])
+        if torch.cuda.is_available():
+            fitness_tensor = fitness_tensor.cpu()
+        self.fitness = fitness_tensor.numpy()
+        
         self.best_idx = np.argmin(self.fitness)
         self.best_solution = self.population[self.best_idx]
         self.best_objective_function = self.fitness[self.best_idx]
@@ -72,7 +93,7 @@ class LShadeAlgorithm(Optimizer):
     def minimize(self):
         lower_bound = np.array([b[0] for b in self.bounds])
         upper_bound = np.array([b[1] for b in self.bounds])
-        max_iterations = self.budget // self.initial_population_size
+        max_iterations = max(2, self.budget // self.initial_population_size)  # Ensure at least 2 iterations
         reduction_factor = (self.initial_population_size - 4) / (max_iterations - 1)
 
         self.initialize_population(lower_bound, upper_bound)
@@ -89,7 +110,12 @@ class LShadeAlgorithm(Optimizer):
                 mutant, f = self.mutate(i, lower_bound, upper_bound)
                 cr = np.clip(np.random.normal(self.mean_cr, 0.1), 0, 1)
                 trial = self.crossover(self.population[i], mutant, cr)
-                trial_fitness = self.fitness_function(trial)
+                
+                # Convert trial to tensor for fitness evaluation
+                trial_tensor = torch.from_numpy(trial).float()
+                if torch.cuda.is_available():
+                    trial_tensor = trial_tensor.cuda()
+                trial_fitness = self._convert_to_numpy(self.fitness_function(trial_tensor))
                 evaluations += 1
 
                 if trial_fitness < self.fitness[i]:
@@ -113,9 +139,7 @@ class LShadeAlgorithm(Optimizer):
                 self.mean_f = (1 - self.c) * self.mean_f + self.c * (np.sum(f_values ** 2) / np.sum(f_values))
             
             # Reduce population size
-            self.population_size = int(self.initial_population_size - generation * reduction_factor)
-            if self.population_size < 4:
-                self.population_size = 4
+            self.population_size = max(4, int(self.initial_population_size - generation * reduction_factor))
 
             # Select the best individuals to form the new population
             best_indices = np.argsort(self.fitness)[:self.population_size]

@@ -316,9 +316,7 @@ class ResultLogger:
     
     def log_optimizer_info(self, 
                           algorithm: str,
-                          pruner: str,
                           algorithm_params: Dict,
-                          pruner_params: Dict,
                           n_trials: int,
                           timeout: Optional[int] = None):
         """Сохраняет информацию о выбранном алгоритме оптимизации."""
@@ -328,15 +326,10 @@ class ResultLogger:
                 "description": self._get_algorithm_description(algorithm),
                 "parameters": algorithm_params
             },
-            "pruner": {
-                "name": pruner,
-                "description": self._get_pruner_description(pruner),
-                "parameters": pruner_params
-            },
             "optimization_settings": {
                 "n_trials": n_trials,
                 "timeout": timeout,
-                "timestamp": self.timestamp
+                "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
             }
         }
         
@@ -371,25 +364,6 @@ class ResultLogger:
                      "Хорошо подходит для мультимодальных функций."
         }
         return descriptions.get(algorithm, "Описание алгоритма отсутствует")
-    
-    def _get_pruner_description(self, pruner: str) -> str:
-        """Возвращает описание алгоритма прунинга."""
-        descriptions = {
-            'median': "Median Pruner - Останавливает неперспективные попытки на основе медианного значения целевой метрики. "
-                     "Простой и эффективный метод ранней остановки.",
-            
-            'percentile': "Percentile Pruner - Использует процентили для определения порога остановки. "
-                        "Позволяет более гибко настраивать агрессивность прунинга.",
-            
-            'hyperband': "Hyperband Pruner - Адаптивный алгоритм на основе многорукого бандита. "
-                        "Эффективно распределяет вычислительные ресурсы между разными конфигурациями.",
-            
-            'threshold': "Threshold Pruner - Простой метод остановки по заданному порогу. "
-                       "Подходит, когда известно целевое значение метрики.",
-            
-            'none': "No Pruning - Отключение ранней остановки. Все попытки выполняются до конца."
-        }
-        return descriptions.get(pruner, "Описание прунера отсутствует")
     
     def log_training(self, epoch: int, losses: Dict[str, float], error: float, 
                     optimizer_type: str = 'adamw', current_lr: float = None):
@@ -427,14 +401,14 @@ class ResultLogger:
                 trial_number,
                 error,
                 architecture['n_layers'],
-                str(architecture['features']),
+                str([architecture[f'layer_{i}_size'] for i in range(architecture['n_layers'])]),
                 architecture['activation'],
                 architecture['lr_adamw'],
                 architecture['scheduler_type'],
-                json.dumps(architecture['scheduler_params']),
-                architecture['use_lbfgs'],
-                architecture.get('lr_lbfgs', ''),
-                architecture.get('lbfgs_start_ratio', '')
+                json.dumps(architecture.get('scheduler_params', {})),
+                'false',  # use_lbfgs всегда false
+                '',       # lr_lbfgs пустой
+                ''        # lbfgs_start_ratio пустой
             ])
     
     def save_model(self, model: nn.Module, name: str):
@@ -602,16 +576,6 @@ class BlackBoxOptimizer:
         
         # Extract optimizer parameters
         lr_adamw = float(params['lr_adamw'])
-        use_lbfgs = bool(params['use_lbfgs'])
-        
-        lbfgs_params = {}
-        if use_lbfgs:
-            lbfgs_params.update({
-                'max_iter': int(params['lbfgs_max_iter']),
-                'history_size': int(params['lbfgs_history_size']),
-                'lr': float(params['lr_lbfgs']),
-                'start_epoch_ratio': float(params['lbfgs_start_ratio'])
-            })
         
         # Create architecture and model
         architecture = SPINNArchitecture(n_layers, features, activation)
@@ -619,8 +583,6 @@ class BlackBoxOptimizer:
         
         optimizer_config = {
             'lr_adamw': lr_adamw,
-            'use_lbfgs': use_lbfgs,
-            'lbfgs_params': lbfgs_params if use_lbfgs else None,
             'scheduler_type': params.get('scheduler_type', 'none'),
             'scheduler_params': {}
         }
@@ -641,39 +603,17 @@ class BlackBoxOptimizer:
 
     def train_model(self, model: SPINN, optimizer_params: Dict, train_data: Tuple, test_data: Tuple,
                    device: torch.device, n_epochs: int, log_iter: int) -> float:
-        """Trains the model and returns the validation error.
-        
-        Args:
-            model: SPINN model to train
-            optimizer_params: Dictionary containing optimizer configurations
-            train_data: Tuple of training data tensors
-            test_data: Tuple of test data tensors
-            device: Device to train on
-            n_epochs: Number of epochs to train
-            log_iter: Logging interval
-            
-        Returns:
-            float: The validation error
-        """
+        """Trains the model and returns the validation error."""
         criterion = SPINN_Loss(model)
         
-        # Setup optimizers
-        optimizer_adamw = optim.AdamW(model.parameters(), lr=optimizer_params['lr_adamw'])
-        
-        if optimizer_params['use_lbfgs']:
-            optimizer_lbfgs = optim.LBFGS(
-                model.parameters(),
-                lr=optimizer_params['lbfgs_params']['lr'],
-                max_iter=optimizer_params['lbfgs_params']['max_iter'],
-                history_size=optimizer_params['lbfgs_params']['history_size']
-            )
-            lbfgs_start_epoch = int(n_epochs * optimizer_params['lbfgs_params']['start_epoch_ratio'])
+        # Setup optimizer
+        optimizer = optim.AdamW(model.parameters(), lr=optimizer_params['lr_adamw'])
         
         # Setup scheduler if specified
         scheduler = None
         if optimizer_params['scheduler_type'] == 'reduce_on_plateau':
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer_adamw,
+                optimizer,
                 mode='min',
                 factor=optimizer_params['scheduler_params']['factor'],
                 patience=optimizer_params['scheduler_params']['patience'],
@@ -681,7 +621,7 @@ class BlackBoxOptimizer:
             )
         elif optimizer_params['scheduler_type'] == 'cosine_annealing':
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer_adamw,
+                optimizer,
                 T_max=optimizer_params['scheduler_params']['T_max'],
                 eta_min=optimizer_params['scheduler_params']['eta_min']
             )
@@ -690,30 +630,24 @@ class BlackBoxOptimizer:
         t, x, y, u_gt, tm, xm, ym = test_data
         
         for epoch in range(1, n_epochs + 1):
-            # Choose optimizer based on epoch
-            if optimizer_params['use_lbfgs'] and epoch >= lbfgs_start_epoch:
-                # LBFGS step
-                def closure():
-                    optimizer_lbfgs.zero_grad()
-                    tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
-                    loss_residual = criterion.residual_loss(tc, xc, yc, uc)
-                    loss_initial = criterion.initial_loss(ti, xi, yi, ui)
-                    loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
-                    loss = loss_residual + loss_initial + loss_boundary
-                    loss.backward()
-                    return loss
-                
-                loss = optimizer_lbfgs.step(closure)
-            else:
-                # AdamW step
-                optimizer_adamw.zero_grad()
-                tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
-                loss_residual = criterion.residual_loss(tc, xc, yc, uc)
-                loss_initial = criterion.initial_loss(ti, xi, yi, ui)
-                loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
-                loss = loss_residual + loss_initial + loss_boundary
-                loss.backward()
-                optimizer_adamw.step()
+            # AdamW step
+            optimizer.zero_grad()
+            tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
+            
+            # Ensure tensors require gradients
+            if not tc.requires_grad:
+                tc.requires_grad_(True)
+            if not xc.requires_grad:
+                xc.requires_grad_(True)
+            if not yc.requires_grad:
+                yc.requires_grad_(True)
+            
+            loss_residual = criterion.residual_loss(tc, xc, yc, uc)
+            loss_initial = criterion.initial_loss(ti, xi, yi, ui)
+            loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
+            loss = loss_residual + loss_initial + loss_boundary
+            loss.backward()
+            optimizer.step()
             
             # Compute validation error
             if epoch % log_iter == 0:
@@ -761,12 +695,6 @@ class BlackBoxOptimizer:
             print(f"    Activation: {params['activation']}")
             print(f"  Optimizers:")
             print(f"    AdamW lr: {params['lr_adamw']:.2e}")
-            if params['use_lbfgs']:
-                print(f"    LBFGS:")
-                print(f"      Learning rate: {params['lr_lbfgs']:.2e}")
-                print(f"      Start ratio: {params['lbfgs_start_ratio']:.2f}")
-                print(f"      Max iterations: {params['lbfgs_max_iter']}")
-                print(f"      History size: {params['lbfgs_history_size']}")
             print(f"  Scheduler: {params['scheduler_type']}")
             if params['scheduler_type'] != 'none':
                 print("    Parameters:")
@@ -839,10 +767,6 @@ class BlackBoxOptimizer:
                 'scheduler_min_lr': (1e-6, 1e-4),
                 'scheduler_T_max': (50, 200),
                 'scheduler_eta_min': (1e-6, 1e-4),
-                'lbfgs_max_iter': (10, 50),
-                'lbfgs_history_size': (10, 100),
-                'lr_lbfgs': (1e-3, 1.0),
-                'lbfgs_start_ratio': (0.5, 0.9)
             }
             for name, bound in param_bounds.items():
                 print(f"  {name:<20}: {bound}")
@@ -913,12 +837,6 @@ class BlackBoxOptimizer:
             print(f"  Activation: {self.best_trial['params']['activation']}")
             print("\nOptimizers:")
             print(f"  AdamW learning rate: {self.best_trial['params']['lr_adamw']:.2e}")
-            if self.best_trial['params']['use_lbfgs']:
-                print("  LBFGS:")
-                print(f"    Learning rate: {self.best_trial['params']['lr_lbfgs']:.2e}")
-                print(f"    Start ratio: {self.best_trial['params']['lbfgs_start_ratio']:.2f}")
-                print(f"    Max iterations: {self.best_trial['params']['lbfgs_max_iter']}")
-                print(f"    History size: {self.best_trial['params']['lbfgs_history_size']}")
             print(f"\nScheduler type: {self.best_trial['params']['scheduler_type']}")
             if self.best_trial['params']['scheduler_type'] != 'none':
                 print("  Parameters:")
@@ -938,9 +856,7 @@ class BlackBoxOptimizer:
             
             self.logger.log_optimizer_info(
                 algorithm=self.algorithm_name,
-                pruner='none',
                 algorithm_params=self.algorithm_params,
-                pruner_params={},
                 n_trials=self.n_trials,
                 timeout=self.timeout
             )
@@ -969,13 +885,6 @@ class BlackBoxOptimizer:
                 activation=self.best_trial['params']['activation']
             ),
             'lr_adamw': self.best_trial['params']['lr_adamw'],
-            'use_lbfgs': self.best_trial['params']['use_lbfgs'],
-            'lbfgs_params': {
-                'lr': self.best_trial['params']['lr_lbfgs'],
-                'max_iter': self.best_trial['params']['lbfgs_max_iter'],
-                'history_size': self.best_trial['params']['lbfgs_history_size'],
-                'start_epoch_ratio': self.best_trial['params']['lbfgs_start_ratio']
-            } if self.best_trial['params']['use_lbfgs'] else None,
             'best_error': self.best_trial['value'],
             'optimization_history': optimizer.objective_function_history,
             'elapsed_time': optimizer.elapsed_time if hasattr(optimizer, 'elapsed_time') else None
@@ -991,11 +900,7 @@ class BlackBoxOptimizer:
             'scheduler_patience',
             'scheduler_min_lr',
             'scheduler_T_max',
-            'scheduler_eta_min',
-            'lbfgs_max_iter',
-            'lbfgs_history_size',
-            'lr_lbfgs',
-            'lbfgs_start_ratio'
+            'scheduler_eta_min'
         ]
 
     def _decode_parameters(self, x: np.ndarray) -> Dict:
@@ -1025,14 +930,6 @@ class BlackBoxOptimizer:
             elif params['scheduler_type'] == 'cosine_annealing':
                 params['scheduler_T_max'] = max(50, min(200, int(round(x[6]))))
                 params['scheduler_eta_min'] = max(1e-6, min(1e-4, x[7]))
-            
-            # LBFGS parameters
-            params['use_lbfgs'] = np.random.choice([True, False])
-            if params['use_lbfgs']:
-                params['lbfgs_max_iter'] = max(10, min(50, int(round(x[8]))))
-                params['lbfgs_history_size'] = max(10, min(100, int(round(x[9]))))
-                params['lr_lbfgs'] = max(1e-3, min(1.0, x[10]))
-                params['lbfgs_start_ratio'] = max(0.5, min(0.9, x[11]))
             
             return params
             
@@ -1109,33 +1006,17 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     print(f"\nOptimizer Configuration:")
     print(f"AdamW learning rate: {results['lr_adamw']:.2e}")
     
-    if results.get('use_lbfgs', False):
-        print("\nLBFGS Configuration:")
-        print(f"Start epoch ratio: {results['lbfgs_params']['start_epoch_ratio']:.2f}")
-        print(f"Learning rate: {results['lbfgs_params']['lr']:.2e}")
-        print(f"Max iterations: {results['lbfgs_params']['max_iter']}")
-        print(f"History size: {results['lbfgs_params']['history_size']}")
-    
     print(f"\nBest validation error: {results['best_error']:.2e}")
     if results.get('elapsed_time'):
         print(f"Total optimization time: {results['elapsed_time']:.2f} seconds")
     
     print("\nTraining best model with full epochs...")
-    # Train the best model with full epochs
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = SPINN(results['architecture']).to(device)
     criterion = SPINN_Loss(model)
     
-    # Create optimizers according to best parameters
-    optimizer_adamw = optim.AdamW(model.parameters(), lr=results['lr_adamw'])
-    if results.get('use_lbfgs', False):
-        optimizer_lbfgs = optim.LBFGS(
-            model.parameters(),
-            lr=results['lbfgs_params']['lr'],
-            max_iter=results['lbfgs_params']['max_iter'],
-            history_size=results['lbfgs_params']['history_size']
-        )
-        lbfgs_start_epoch = int(kwargs['EPOCHS'] * results['lbfgs_params']['start_epoch_ratio'])
+    # Create optimizer
+    optimizer = optim.AdamW(model.parameters(), lr=results['lr_adamw'])
     
     train_data = spinn_train_generator_klein_gordon3d(kwargs['NC'], seed=kwargs['SEED'])
     train_data = [t.to(device) if isinstance(t, torch.Tensor) else 
@@ -1151,54 +1032,24 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     best_error = float('inf')
     
     for e in pbar:
-        # Choose optimizer based on epoch
-        if results.get('use_lbfgs', False) and e >= lbfgs_start_epoch:
-            # LBFGS step
-            def closure():
-                optimizer_lbfgs.zero_grad()
-                tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
-                
-                # Ensure tensors require gradients
-                if not tc.requires_grad:
-                    tc.requires_grad_(True)
-                if not xc.requires_grad:
-                    xc.requires_grad_(True)
-                if not yc.requires_grad:
-                    yc.requires_grad_(True)
-                
-                loss_residual = criterion.residual_loss(tc, xc, yc, uc)
-                loss_initial = criterion.initial_loss(ti, xi, yi, ui)
-                loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
-                loss = loss_residual + loss_initial + loss_boundary
-                loss.backward()
-                return loss
-            
-            loss = optimizer_lbfgs.step(closure)
-            # Extract loss components for display
-            with torch.no_grad():
-                tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
-                loss_residual = criterion.residual_loss(tc, xc, yc, uc)
-                loss_initial = criterion.initial_loss(ti, xi, yi, ui)
-                loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
-        else:
-            # AdamW step
-            optimizer_adamw.zero_grad()
-            tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
-            
-            # Ensure tensors require gradients
-            if not tc.requires_grad:
-                tc.requires_grad_(True)
-            if not xc.requires_grad:
-                xc.requires_grad_(True)
-            if not yc.requires_grad:
-                yc.requires_grad_(True)
-            
-            loss_residual = criterion.residual_loss(tc, xc, yc, uc)
-            loss_initial = criterion.initial_loss(ti, xi, yi, ui)
-            loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
-            loss = loss_residual + loss_initial + loss_boundary
-            loss.backward()
-            optimizer_adamw.step()
+        # AdamW step
+        optimizer.zero_grad()
+        tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
+        
+        # Ensure tensors require gradients
+        if not tc.requires_grad:
+            tc.requires_grad_(True)
+        if not xc.requires_grad:
+            xc.requires_grad_(True)
+        if not yc.requires_grad:
+            yc.requires_grad_(True)
+        
+        loss_residual = criterion.residual_loss(tc, xc, yc, uc)
+        loss_initial = criterion.initial_loss(ti, xi, yi, ui)
+        loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
+        loss = loss_residual + loss_initial + loss_boundary
+        loss.backward()
+        optimizer.step()
         
         # Log results at each step
         with torch.no_grad():
@@ -1216,7 +1067,7 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
                     'boundary': loss_boundary.item()
                 },
                 error.item(),
-                'lbfgs' if results.get('use_lbfgs', False) and e >= lbfgs_start_epoch else 'adamw'
+                'adamw'
             )
             
             # Update progress bar
@@ -1303,7 +1154,7 @@ if __name__ == '__main__':
     parser.add_argument('--nb', type=int, default=100, help='Number of boundary points')
     parser.add_argument('--nc-test', type=int, default=50, help='Number of test points')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--epochs', type=int, default=10000, help='Number of epochs')
+    parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
     parser.add_argument('--log-iter', type=int, default=1000, help='Logging interval')
     parser.add_argument('--n-trials', type=int, default=150, help='Number of optimization trials')
     parser.add_argument('--timeout', type=int, default=None, help='Optimization timeout in seconds')
