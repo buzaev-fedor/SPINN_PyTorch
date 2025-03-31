@@ -1,13 +1,14 @@
 import os
 import time
 import json
-import optuna
+# import optuna
 import numpy as np
 from copy import deepcopy
 from pathlib import Path
 import csv
 from datetime import datetime
 import sys
+import pandas as pd 
 
 import matplotlib.pyplot as plt
 from tqdm import trange
@@ -31,7 +32,8 @@ from bbo_utils.pso import ParticleSwarmOptimization
 from bbo_utils.grey_wolf_optimizer import GreyWolfOptimizer
 from bbo_utils.whales import WhaleOptimization
 
-class SPINNArchitecture:
+
+class PINNArchitecture:
     def __init__(self, n_layers: int, features: List[int], activation: str):
         self.n_layers = n_layers
         self.features = features
@@ -45,14 +47,14 @@ class SPINNArchitecture:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SPINNArchitecture':
+    def from_dict(cls, data: Dict[str, Any]) -> 'PINNArchitecture':
         return cls(
             n_layers=data['n_layers'],
             features=data['features'],
             activation=data['activation']
         )
 
-class SPINN(nn.Module):
+class PINN(nn.Module):
     ACTIVATIONS = {
         'tanh': nn.Tanh,
         'relu': nn.ReLU,
@@ -62,60 +64,45 @@ class SPINN(nn.Module):
         'Hardtanh': nn.Hardtanh,
     }
     
-    def __init__(self, architecture: SPINNArchitecture):
+    def __init__(self, architecture: PINNArchitecture):
         super().__init__()
         self.features = architecture.features
         self.activation_name = architecture.activation
         self.activation = self.ACTIVATIONS[architecture.activation]()
         
-        # Создаем слои для каждого входа (t, x, y)
-        self.networks = nn.ModuleList([
-            self._build_network() for _ in range(3)
-        ])
-        
-        # Добавляем слои для объединения выходов
-        self.combine_layer1 = nn.Linear(self.features[-1] * 2, self.features[-1])
-        self.combine_layer2 = nn.Linear(self.features[-1] * 2, self.features[-1])
-        self.final_layer = nn.Linear(self.features[-1], 1)
-    
-    def _build_network(self):
+        # Создаем слои нейронной сети
         layers = []
-        layers.append(nn.Linear(1, self.features[0]))
+        # Входной слой принимает все 3 координаты (t, x, y)
+        layers.append(nn.Linear(3, self.features[0]))
         layers.append(self.activation)
         
-        for i in range(len(self.features) - 2):
+        # Скрытые слои
+        for i in range(len(self.features) - 1):
             layers.append(nn.Linear(self.features[i], self.features[i + 1]))
             layers.append(self.activation)
             
-        layers.append(nn.Linear(self.features[-2], self.features[-1]))
-        layers.append(self.activation)
-        return nn.Sequential(*layers)
-    
-    def _ensure_2d(self, x):
-        if x.dim() == 1:
-            return x.unsqueeze(1)
-        return x
+        # Выходной слой
+        self.layers = nn.ModuleList(layers)
+        self.final_layer = nn.Linear(self.features[-1], 1)
     
     def forward(self, t, x, y):
-        # Преобразуем входы в 2D тензоры [batch_size, 1]
-        t = self._ensure_2d(t)
-        x = self._ensure_2d(x)
-        y = self._ensure_2d(y)
+        # Объединяем входы в один тензор [batch_size, 3]
+        if t.dim() == 1:
+            t = t.unsqueeze(1)
+        if x.dim() == 1:
+            x = x.unsqueeze(1)
+        if y.dim() == 1:
+            y = y.unsqueeze(1)
+            
+        inputs = torch.cat([t, x, y], dim=1)
         
-        # Пропускаем через отдельные сети
-        t_features = self.networks[0](t)
-        x_features = self.networks[1](x)
-        y_features = self.networks[2](y)
+        # Прямой проход через слои сети
+        x = inputs
+        for layer in self.layers:
+            x = layer(x)
         
-        # Объединяем признаки
-        combined = torch.cat([t_features, x_features], dim=1)
-        combined = self.activation(self.combine_layer1(combined))
-        
-        combined = torch.cat([combined, y_features], dim=1)
-        combined = self.activation(self.combine_layer2(combined))
-        
-        # Финальный слой
-        output = self.final_layer(combined)
+        # Выходной слой
+        output = self.final_layer(x)
         return output.squeeze(-1)
 
 # Функция для вычисления производных второго порядка
@@ -151,7 +138,7 @@ def compute_second_derivative(u, x):
     
     return d2u_dx2
 
-class SPINN_Loss:
+class PINN_Loss:
     def __init__(self, model):
         self.model = model
 
@@ -164,10 +151,8 @@ class SPINN_Loss:
         if not y.requires_grad:
             y.requires_grad_(True)
         
-        # Получаем выход модели и убеждаемся, что он требует градиентов
+        # Теперь вычисляем выход модели после установки requires_grad
         u = self.model(t, x, y)
-        if not u.requires_grad:
-            u.requires_grad_(True)
         
         # Вычисляем производные
         utt = compute_second_derivative(u, t)
@@ -179,12 +164,28 @@ class SPINN_Loss:
         return torch.mean(residual**2)
 
     def initial_loss(self, t, x, y, u_true):
+        # Убеждаемся в требовании градиентов
+        if not t.requires_grad:
+            t.requires_grad_(True)
+        if not x.requires_grad:
+            x.requires_grad_(True)
+        if not y.requires_grad:
+            y.requires_grad_(True)
+            
         u_pred = self.model(t, x, y)
         return torch.mean((u_pred - u_true)**2)
 
     def boundary_loss(self, t, x, y, u_true):
         loss = 0.
         for i in range(len(t)):
+            # Убеждаемся в требовании градиентов для каждого набора данных
+            if not t[i].requires_grad:
+                t[i].requires_grad_(True)
+            if not x[i].requires_grad:
+                x[i].requires_grad_(True)
+            if not y[i].requires_grad:
+                y[i].requires_grad_(True)
+                
             u_pred = self.model(t[i], x[i], y[i])
             loss += torch.mean((u_pred - u_true[i])**2)
         return loss / len(t)
@@ -201,7 +202,8 @@ class SPINN_Loss:
 # Функция шага оптимизации
 def update_model(model, optimizer, train_data):
     optimizer.zero_grad()
-    loss = spinn_loss_klein_gordon3d(model, *train_data)
+    criterion = PINN_Loss(model)
+    loss = criterion(*train_data)
     loss.backward()
     optimizer.step()
     return loss.item()
@@ -217,7 +219,7 @@ def _klein_gordon3d_source_term(t, x, y):
     return u**2 - 4*u
 
 # Генератор тренировочных данных
-def spinn_train_generator_klein_gordon3d(nc, seed=None):
+def pinn_train_generator_klein_gordon3d(nc, seed=None):
     if seed is not None:
         torch.manual_seed(seed)
     
@@ -249,7 +251,7 @@ def spinn_train_generator_klein_gordon3d(nc, seed=None):
     return tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub
 
 # Генератор тестовых данных
-def spinn_test_generator_klein_gordon3d(nc_test):
+def pinn_test_generator_klein_gordon3d(nc_test):
     t = torch.linspace(0, 10, nc_test)
     x = torch.linspace(-1, 1, nc_test)
     y = torch.linspace(-1, 1, nc_test)
@@ -273,10 +275,32 @@ class ResultLogger:
         self.models_dir = self.run_dir / "models"
         self.logs_dir = self.run_dir / "logs"
         self.plots_dir = self.run_dir / "plots"
+        self.trials_dir = self.run_dir / "trials"
+        self.csv_dir = self.run_dir / "csv_logs"
         
         self.models_dir.mkdir(exist_ok=True)
         self.logs_dir.mkdir(exist_ok=True)
         self.plots_dir.mkdir(exist_ok=True)
+        self.trials_dir.mkdir(exist_ok=True)
+        self.csv_dir.mkdir(exist_ok=True)
+        
+        # Инициализируем DataFrame'ы для логов
+        self.training_df = pd.DataFrame(columns=['epoch', 'total_loss', 'residual_loss', 'initial_loss', 'boundary_loss', 'error'])
+        self.metrics_df = pd.DataFrame(columns=['trial_number', 'error', 'n_layers', 'features', 'activation', 
+                                              'lr_adamw', 'scheduler_type', 'scheduler_params',
+                                              'use_lbfgs', 'lr_lbfgs', 'lbfgs_start_ratio'])
+        self.detailed_loss_df = pd.DataFrame(columns=['epoch', 'timestamp', 'total_loss', 'residual_loss', 'initial_loss', 
+                                                    'boundary_loss', 'error', 'optimizer_type', 'current_lr'])
+        self.scheduler_df = pd.DataFrame(columns=['epoch', 'scheduler_type', 'current_lr', 'metric_value'])
+        self.trials_df = pd.DataFrame(columns=['trial_number', 'optimizer_name', 'error', 'n_layers', 'layer_sizes',
+                                             'activation', 'lr_adamw', 'scheduler_type', 'scheduler_factor',
+                                             'scheduler_patience', 'scheduler_min_lr', 'scheduler_T_max',
+                                             'scheduler_eta_min', 'timestamp'])
+        self.training_history_df = pd.DataFrame(columns=['trial_number', 'epoch', 'total_loss', 'residual_loss',
+                                                        'initial_loss', 'boundary_loss', 'error', 'learning_rate'])
+        self.optimizer_info_df = pd.DataFrame(columns=['algorithm', 'population_size', 'c', 'p', 'alpha', 'gamma',
+                                                      'rho', 'sigma', 'w', 'c1', 'c2', 'num_wolves',
+                                                      'n_trials', 'timeout', 'timestamp'])
         
         # Инициализируем файлы для логов
         self.training_log_file = self.logs_dir / "training_log.csv"
@@ -284,132 +308,236 @@ class ResultLogger:
         self.optimizer_info_file = self.logs_dir / "optimizer_info.json"
         self.detailed_loss_file = self.logs_dir / "detailed_losses.csv"
         self.scheduler_log_file = self.logs_dir / "scheduler_log.csv"
-        self.bbo_log_file = self.logs_dir / "bbo_log.txt"  # Новый файл для логирования BBO
+        self.bbo_log_file = self.logs_dir / "bbo_log.txt"
+        self.trials_summary_file = self.logs_dir / "trials_summary.json"
         
-        # Создаем заголовки CSV файлов
-        with open(self.training_log_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['epoch', 'total_loss', 'residual_loss', 'initial_loss', 'boundary_loss', 'error'])
-            
-        with open(self.metrics_log_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['trial_number', 'error', 'n_layers', 'features', 'activation', 
-                           'lr_adamw', 'scheduler_type', 'scheduler_params',
-                           'use_lbfgs', 'lr_lbfgs', 'lbfgs_start_ratio'])
+        # Инициализируем CSV файлы для логов
+        self.trials_csv_file = self.csv_dir / "trials.csv"
+        self.training_history_csv_file = self.csv_dir / "training_history.csv"
+        self.optimizer_info_csv_file = self.csv_dir / "optimizer_info.csv"
         
-        # Создаем заголовок для детального лога лоссов
-        with open(self.detailed_loss_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['epoch', 'timestamp', 'total_loss', 'residual_loss', 'initial_loss', 
-                           'boundary_loss', 'error', 'optimizer_type', 'current_lr'])
+        # Сохраняем пустые DataFrame'ы в CSV файлы
+        self.training_df.to_csv(self.training_log_file, index=False)
+        self.metrics_df.to_csv(self.metrics_log_file, index=False)
+        self.detailed_loss_df.to_csv(self.detailed_loss_file, index=False)
+        self.scheduler_df.to_csv(self.scheduler_log_file, index=False)
+        self.trials_df.to_csv(self.trials_csv_file, index=False)
+        self.training_history_df.to_csv(self.training_history_csv_file, index=False)
+        self.optimizer_info_df.to_csv(self.optimizer_info_csv_file, index=False)
         
-        # Создаем заголовок для лога планировщика
-        with open(self.scheduler_log_file, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['epoch', 'scheduler_type', 'current_lr', 'metric_value'])
+        # Инициализируем список для хранения результатов trials
+        self.trials_results = []
     
-    def log_scheduler(self, epoch: int, scheduler_type: str, current_lr: float, metric_value: float):
+    def _get_iteration_files(self, num_iter: int, optimizer_name: str) -> Dict[str, Path]:
+        """Возвращает пути к файлам для конкретной итерации."""
+        return {
+            'training_log': self.logs_dir / f"{num_iter}_{optimizer_name}_training_log.csv",
+            'metrics_log': self.logs_dir / f"{num_iter}_{optimizer_name}_metrics_log.csv",
+            'detailed_loss': self.logs_dir / f"{num_iter}_{optimizer_name}_detailed_losses.csv",
+            'scheduler_log': self.logs_dir / f"{num_iter}_{optimizer_name}_scheduler_log.csv",
+            'trial_json': self.trials_dir / f"{num_iter}_{optimizer_name}.json",
+            'trial_csv': self.csv_dir / f"{num_iter}_{optimizer_name}_trial.csv",
+            'training_history': self.csv_dir / f"{num_iter}_{optimizer_name}_training_history.csv"
+        }
+
+    def log_trial(self, trial_number: int, optimizer_name: str, error: float, params: Dict, 
+                 training_history: Optional[List[Dict]] = None):
+        """Сохраняет результаты отдельного trial."""
+        # Получаем пути к файлам для текущей итерации
+        iteration_files = self._get_iteration_files(trial_number, optimizer_name)
+        
+        # Преобразуем тензоры в числа в истории обучения
+        if training_history is not None:
+            training_history = [
+                {
+                    'epoch': int(entry['epoch']),
+                    'total_loss': float(entry['total_loss']),
+                    'residual_loss': float(entry['residual_loss']),
+                    'initial_loss': float(entry['initial_loss']),
+                    'boundary_loss': float(entry['boundary_loss']),
+                    'error': float(entry['error']),
+                    'learning_rate': float(entry['learning_rate'])
+                }
+                for entry in training_history
+            ]
+            
+            # Добавляем историю обучения в DataFrame
+            history_df = pd.DataFrame(training_history)
+            history_df['trial_number'] = trial_number
+            history_df.to_csv(iteration_files['training_history'], index=False)
+        
+        # Преобразуем параметры, содержащие тензоры или numpy типы
+        processed_params = {}
+        for key, value in params.items():
+            if isinstance(value, (torch.Tensor, np.float32, np.float64, np.int32, np.int64)):
+                processed_params[key] = float(value)
+            elif isinstance(value, dict):
+                processed_params[key] = {
+                    k: float(v) if isinstance(v, (torch.Tensor, np.float32, np.float64, np.int32, np.int64)) else v
+                    for k, v in value.items()
+                }
+            elif isinstance(value, list):
+                processed_params[key] = [
+                    float(v) if isinstance(v, (torch.Tensor, np.float32, np.float64, np.int32, np.int64)) else v
+                    for v in value
+                ]
+            else:
+                processed_params[key] = value
+        
+        trial_data = {
+            'trial_number': int(trial_number),
+            'optimizer_name': str(optimizer_name),
+            'error': float(error),
+            'params': processed_params,
+            'training_history': training_history,
+            'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+        
+        # Сохраняем в отдельный файл JSON
+        with open(iteration_files['trial_json'], 'w') as f:
+            json.dump(trial_data, f, indent=2)
+        
+        # Добавляем в DataFrame trials
+        trial_row = pd.DataFrame([{
+            'trial_number': trial_number,
+            'optimizer_name': optimizer_name,
+            'error': error,
+            'n_layers': processed_params['n_layers'],
+            'layer_sizes': str([processed_params[f'layer_{j}_size'] for j in range(processed_params['n_layers'])]),
+            'activation': processed_params['activation'],
+            'lr_adamw': processed_params['lr_adamw'],
+            'scheduler_type': processed_params['scheduler_type'],
+            'scheduler_factor': processed_params.get('scheduler_factor', ''),
+            'scheduler_patience': processed_params.get('scheduler_patience', ''),
+            'scheduler_min_lr': processed_params.get('scheduler_min_lr', ''),
+            'scheduler_T_max': processed_params.get('scheduler_T_max', ''),
+            'scheduler_eta_min': processed_params.get('scheduler_eta_min', ''),
+            'timestamp': trial_data['timestamp']
+        }])
+        
+        trial_row.to_csv(iteration_files['trial_csv'], index=False)
+        
+        # Добавляем в общий список
+        self.trials_results.append(trial_data)
+        
+        # Обновляем сводный файл
+        self._update_trials_summary()
+    
+    def _update_trials_summary(self):
+        """Обновляет сводный файл с результатами всех trials."""
+        # Сортируем по ошибке
+        sorted_trials = sorted(self.trials_results, key=lambda x: x['error'])
+        
+        # Сохраняем в JSON
+        with open(self.trials_summary_file, 'w') as f:
+            json.dump({
+                'total_trials': len(sorted_trials),
+                'trials': sorted_trials
+            }, f, indent=2)
+    
+    def get_top_configurations(self, n: int = 10) -> List[Dict]:
+        """Возвращает топ-N лучших конфигураций."""
+        sorted_trials = sorted(self.trials_results, key=lambda x: x['error'])
+        return sorted_trials[:n]
+    
+    def print_top_configurations(self, n: int = 10):
+        """Выводит топ-N лучших конфигураций в консоль."""
+        top_configs = self.get_top_configurations(n)
+        print("\n" + "="*80)
+        print(f"Top {n} Best Configurations:")
+        print("="*80)
+        
+        for i, config in enumerate(top_configs, 1):
+            print(f"\n{i}. Trial {config['trial_number']} ({config['optimizer_name']})")
+            print(f"   Error: {config['error']:.2e}")
+            print(f"   Architecture:")
+            print(f"     Layers: {config['params']['n_layers']}")
+            print(f"     Layer sizes: {[config['params'][f'layer_{j}_size'] for j in range(config['params']['n_layers'])]}")
+            print(f"     Activation: {config['params']['activation']}")
+            print(f"   Optimizer:")
+            print(f"     AdamW lr: {config['params']['lr_adamw']:.2e}")
+            print(f"     Scheduler: {config['params']['scheduler_type']}")
+            if config['params']['scheduler_type'] != 'none':
+                print("     Scheduler parameters:")
+                if config['params']['scheduler_type'] == 'reduce_on_plateau':
+                    print(f"       Factor: {config['params']['scheduler_factor']:.2f}")
+                    print(f"       Patience: {config['params']['scheduler_patience']}")
+                    print(f"       Min lr: {config['params']['scheduler_min_lr']:.2e}")
+                elif config['params']['scheduler_type'] == 'cosine_annealing':
+                    print(f"       T_max: {config['params']['scheduler_T_max']}")
+                    print(f"       Eta min: {config['params']['scheduler_eta_min']:.2e}")
+            print("-"*80)
+    
+    def log_scheduler(self, epoch: int, scheduler_type: str, current_lr: float, metric_value: float,
+                     trial_number: int, optimizer_name: str):
         """Логирует информацию о работе планировщика."""
-        with open(self.scheduler_log_file, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([epoch, scheduler_type, current_lr, metric_value])
-    
-    def log_optimizer_info(self, 
-                          algorithm: str,
-                          algorithm_params: Dict,
-                          n_trials: int,
-                          timeout: Optional[int] = None):
-        """Сохраняет информацию о выбранном алгоритме оптимизации."""
-        optimizer_info = {
-            "algorithm": {
-                "name": algorithm,
-                "description": self._get_algorithm_description(algorithm),
-                "parameters": algorithm_params
-            },
-            "optimization_settings": {
-                "n_trials": n_trials,
-                "timeout": timeout,
-                "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
-            }
-        }
+        iteration_files = self._get_iteration_files(trial_number, optimizer_name)
         
-        with open(self.optimizer_info_file, 'w') as f:
-            json.dump(optimizer_info, f, indent=2)
-    
-    def _get_algorithm_description(self, algorithm: str) -> str:
-        """Возвращает описание алгоритма оптимизации."""
-        descriptions = {
-            'jade': "JADE (Adaptive Differential Evolution) - Адаптивный алгоритм дифференциальной эволюции. "
-                   "Автоматически адаптирует параметры мутации и скрещивания. "
-                   "Эффективен для непрерывной оптимизации и хорошо масштабируется.",
-            
-            'lshade': "L-SHADE (Linear Success-History based Adaptive DE) - Улучшенная версия SHADE алгоритма. "
-                     "Использует линейное уменьшение размера популяции и историю успешных решений. "
-                     "Особенно эффективен для задач большой размерности.",
-            
-            'nelder_mead': "Nelder-Mead (Симплекс-метод) - Безградиентный метод оптимизации. "
-                          "Использует симплекс для поиска минимума функции. "
-                          "Хорошо работает для гладких функций небольшой размерности.",
-            
-            'pso': "Particle Swarm Optimization - Метод роя частиц. "
-                  "Имитирует социальное поведение птиц или рыб. "
-                  "Эффективен для многомодальных функций и параллельных вычислений.",
-            
-            'grey_wolf': "Grey Wolf Optimizer - Алгоритм, имитирующий иерархию и охотничье поведение серых волков. "
-                        "Хорошо балансирует между глобальным и локальным поиском. "
-                        "Эффективен для сложных многомерных задач.",
-            
-            'whales': "Whale Optimization Algorithm - Алгоритм, основанный на охотничьем поведении горбатых китов. "
-                     "Использует стратегию пузырьковой сети и преследования добычи. "
-                     "Хорошо подходит для мультимодальных функций."
-        }
-        return descriptions.get(algorithm, "Описание алгоритма отсутствует")
+        scheduler_row = pd.DataFrame([{
+            'epoch': epoch,
+            'scheduler_type': scheduler_type,
+            'current_lr': current_lr,
+            'metric_value': metric_value
+        }])
+        
+        scheduler_row.to_csv(iteration_files['scheduler_log'], index=False)
     
     def log_training(self, epoch: int, losses: Dict[str, float], error: float, 
-                    optimizer_type: str = 'adamw', current_lr: float = None):
-        # Записываем в основной лог
-        with open(self.training_log_file, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                epoch,
-                losses['total'],
-                losses['residual'],
-                losses['initial'],
-                losses['boundary'],
-                error
-            ])
-        
-        # Записываем в детальный лог с временной меткой
-        with open(self.detailed_loss_file, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                epoch,
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                losses['total'],
-                losses['residual'],
-                losses['initial'],
-                losses['boundary'],
-                error,
-                optimizer_type,
-                current_lr if current_lr is not None else ''
-            ])
+                    optimizer_type: str = 'adamw', current_lr: float = None,
+                    trial_number: int = None, optimizer_name: str = None):
+        """Логирует информацию о процессе обучения."""
+        if trial_number is not None and optimizer_name is not None:
+            iteration_files = self._get_iteration_files(trial_number, optimizer_name)
+            
+            # Добавляем в training_df
+            training_row = pd.DataFrame([{
+                'epoch': epoch,
+                'total_loss': losses['total'],
+                'residual_loss': losses['residual'],
+                'initial_loss': losses['initial'],
+                'boundary_loss': losses['boundary'],
+                'error': error
+            }])
+            
+            # Сохраняем на каждом первом шаге итерации
+            training_row.to_csv(iteration_files['training_log'], index=False)
+            
+            # Добавляем в detailed_loss_df
+            detailed_row = pd.DataFrame([{
+                'epoch': epoch,
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                'total_loss': losses['total'],
+                'residual_loss': losses['residual'],
+                'initial_loss': losses['initial'],
+                'boundary_loss': losses['boundary'],
+                'error': error,
+                'optimizer_type': optimizer_type,
+                'current_lr': current_lr if current_lr is not None else ''
+            }])
+            
+            # Сохраняем на каждом первом шаге итерации
+            
+            detailed_row.to_csv(iteration_files['detailed_loss'], index=False)
     
-    def log_metrics(self, trial_number: int, error: float, architecture: Dict):
-        with open(self.metrics_log_file, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                trial_number,
-                error,
-                architecture['n_layers'],
-                str([architecture[f'layer_{i}_size'] for i in range(architecture['n_layers'])]),
-                architecture['activation'],
-                architecture['lr_adamw'],
-                architecture['scheduler_type'],
-                json.dumps(architecture.get('scheduler_params', {})),
-                'false',  # use_lbfgs всегда false
-                '',       # lr_lbfgs пустой
-                ''        # lbfgs_start_ratio пустой
-            ])
+    def log_metrics(self, trial_number: int, error: float, architecture: Dict, optimizer_name: str):
+        """Логирует метрики trial."""
+        iteration_files = self._get_iteration_files(trial_number, optimizer_name)
+        
+        metrics_row = pd.DataFrame([{
+            'trial_number': trial_number,
+            'error': error,
+            'n_layers': architecture['n_layers'],
+            'features': str([architecture[f'layer_{i}_size'] for i in range(architecture['n_layers'])]),
+            'activation': architecture['activation'],
+            'lr_adamw': architecture['lr_adamw'],
+            'scheduler_type': architecture['scheduler_type'],
+            'scheduler_params': json.dumps(architecture.get('scheduler_params', {})),
+            'use_lbfgs': 'false',
+            'lr_lbfgs': '',
+            'lbfgs_start_ratio': ''
+        }])
+        
+        metrics_row.to_csv(iteration_files['metrics_log'], index=False)
     
     def save_model(self, model: nn.Module, name: str):
         torch.save(model.state_dict(), self.models_dir / f"{name}.pth")
@@ -523,7 +651,7 @@ class BlackBoxOptimizer:
     def __init__(self, 
                  n_trials: int = 150,
                  timeout: Optional[int] = None,
-                 study_name: str = "spinn_optimization",
+                 study_name: str = "pinn_optimization",
                  logger: Optional[ResultLogger] = None,
                  algorithm: str = 'jade',
                  algorithm_params: Optional[Dict] = None,
@@ -546,6 +674,7 @@ class BlackBoxOptimizer:
         self.verbose = verbose
         self.current_trial = 0
         self.best_error_so_far = float('inf')
+        self.training_history = []  # Добавляем список для хранения истории обучения
         
         # Validate algorithm choice
         if algorithm not in self.ALGORITHMS:
@@ -567,7 +696,7 @@ class BlackBoxOptimizer:
             print(f"  Algorithm parameters: {self.algorithm_params}")
             print("-"*60)
 
-    def create_model(self, params: Dict) -> Tuple[SPINN, Dict]:
+    def create_model(self, params: Dict) -> Tuple[PINN, Dict]:
         """Creates a model with the given parameters."""
         # Extract architecture parameters
         n_layers = int(params['n_layers'])
@@ -578,8 +707,8 @@ class BlackBoxOptimizer:
         lr_adamw = float(params['lr_adamw'])
         
         # Create architecture and model
-        architecture = SPINNArchitecture(n_layers, features, activation)
-        model = SPINN(architecture)
+        architecture = PINNArchitecture(n_layers, features, activation)
+        model = PINN(architecture)
         
         optimizer_config = {
             'lr_adamw': lr_adamw,
@@ -601,10 +730,10 @@ class BlackBoxOptimizer:
         
         return model, optimizer_config
 
-    def train_model(self, model: SPINN, optimizer_params: Dict, train_data: Tuple, test_data: Tuple,
-                   device: torch.device, n_epochs: int, log_iter: int) -> float:
+    def train_model(self, model: PINN, optimizer_params: Dict, train_data: Tuple, test_data: Tuple,
+                   device: torch.device, n_epochs: int) -> float:
         """Trains the model and returns the validation error."""
-        criterion = SPINN_Loss(model)
+        criterion = PINN_Loss(model)
         
         # Setup optimizer
         optimizer = optim.AdamW(model.parameters(), lr=optimizer_params['lr_adamw'])
@@ -629,6 +758,12 @@ class BlackBoxOptimizer:
         best_error = float('inf')
         t, x, y, u_gt, tm, xm, ym = test_data
         
+        # Очищаем историю обучения для нового trial
+        self.training_history = []
+        
+        # Для экономии памяти будем сохранять только каждый log_step шаг
+        log_step = max(1, n_epochs // 50)  # Максимум 50 записей
+        
         for epoch in range(1, n_epochs + 1):
             # AdamW step
             optimizer.zero_grad()
@@ -650,24 +785,35 @@ class BlackBoxOptimizer:
             optimizer.step()
             
             # Compute validation error
-            if epoch % log_iter == 0:
-                with torch.no_grad():
-                    model.eval()
-                    u = model(tm.reshape(-1), xm.reshape(-1), ym.reshape(-1))
-                    error = relative_l2(u, u_gt.reshape(-1))
-                    
-                    if error < best_error:
-                        best_error = error
-                    
-                    model.train()
+            with torch.no_grad():
+                model.eval()
+                u = model(tm.reshape(-1), xm.reshape(-1), ym.reshape(-1))
+                error = relative_l2(u, u_gt.reshape(-1))
                 
-                # Update scheduler if using ReduceLROnPlateau
-                if scheduler is not None and optimizer_params['scheduler_type'] == 'reduce_on_plateau':
-                    scheduler.step(error)
+                if error < best_error:
+                    best_error = error
+                
+                model.train()
             
-            # Update cosine annealing scheduler
-            if scheduler is not None and optimizer_params['scheduler_type'] == 'cosine_annealing':
-                scheduler.step()
+            # Сохраняем историю обучения только на определенных шагах, чтобы сэкономить память
+            if epoch % log_step == 0 or epoch == n_epochs:
+                self.training_history.append({
+                    'epoch': int(epoch),
+                    'total_loss': float(loss.item()),
+                    'residual_loss': float(loss_residual.item()),
+                    'initial_loss': float(loss_initial.item()),
+                    'boundary_loss': float(loss_boundary.item()),
+                    'error': float(error.item()),
+                    'learning_rate': float(optimizer.param_groups[0]['lr'])
+                })
+            
+            # Update scheduler if using ReduceLROnPlateau
+            if scheduler is not None and optimizer_params['scheduler_type'] == 'reduce_on_plateau':
+                scheduler.step(error)
+        
+        # Update cosine annealing scheduler
+        if scheduler is not None and optimizer_params['scheduler_type'] == 'cosine_annealing':
+            scheduler.step()
         
         # Final validation error
         with torch.no_grad():
@@ -713,16 +859,17 @@ class BlackBoxOptimizer:
         model = model.to(device)
         
         # Generate data
-        train_data = spinn_train_generator_klein_gordon3d(params['NC'], seed=params['SEED'])
+        train_data = pinn_train_generator_klein_gordon3d(params['NC'], seed=params['SEED'])
         train_data = [t.to(device) if isinstance(t, torch.Tensor) else 
                      [tensor.to(device) for tensor in t] if isinstance(t, list) else t 
                      for t in train_data]
         
-        test_data = spinn_test_generator_klein_gordon3d(params['NC_TEST'])
+        test_data = pinn_test_generator_klein_gordon3d(params['NC_TEST'])
         test_data = [t.to(device) for t in test_data]
         
         # Train model with reduced epochs for optimization
-        n_epochs = params['EPOCHS'] // 10
+        # n_epochs = params['EPOCHS'] // 10
+        n_epochs = params['EPOCHS']
         
         if self.verbose:
             print(f"\nTraining for {n_epochs} epochs...")
@@ -733,8 +880,7 @@ class BlackBoxOptimizer:
             train_data=train_data,
             test_data=test_data,
             device=device,
-            n_epochs=n_epochs,
-            log_iter=params['LOG_ITER']
+            n_epochs=n_epochs
         )
         
         if error < self.best_error_so_far:
@@ -748,6 +894,16 @@ class BlackBoxOptimizer:
             print(f"\nTrial {self.current_trial} completed:")
             print(f"  Current error: {error:.2e}")
             print(f"  Best error so far: {self.best_error_so_far:.2e}")
+        
+        # Сохраняем результаты trial
+        if self.logger is not None:
+            self.logger.log_trial(
+                trial_number=self.current_trial,
+                optimizer_name=self.algorithm_name,
+                error=error,
+                params=params,
+                training_history=self.training_history
+            )
         
         return error
 
@@ -777,11 +933,17 @@ class BlackBoxOptimizer:
         
         # Get parameter names and bounds
         param_names = self._get_parameter_names()
-        bounds = [param_bounds[p] for p in param_names]
+        bounds = [param_bounds[p] if p in param_bounds else (0, 1) for p in param_names]
         
         # Create objective function
         def objective(x):
-            return self.objective_function(self._decode_parameters(x))
+            try:
+                return self.objective_function(self._decode_parameters(x))
+            except Exception as e:
+                if self.verbose:
+                    print(f"Error in objective function: {str(e)}")
+                # Return a high value to penalize errors
+                return 1e10
         
         # Initialize and run the optimizer based on algorithm type
         if self.verbose:
@@ -800,19 +962,25 @@ class BlackBoxOptimizer:
                 start_time = time.time()
             
             # Run optimization with or without timeout
-            if self.timeout is not None:
-                optimizer.run_minimize_with_timeout(self.timeout)
-            else:
-                optimizer.run_minimize()
+            try:
+                if self.timeout is not None:
+                    optimizer.run_minimize_with_timeout(self.timeout)
+                else:
+                    optimizer.run_minimize()
+            except Exception as e:
+                if self.verbose:
+                    print(f"\nOptimization was interrupted: {str(e)}")
+                    print("Using best solution found so far.")
             
             if self.verbose:
                 end_time = time.time()
                 elapsed_time = end_time - start_time
                 print("\n" + "="*60)
-                print("Optimization completed successfully!")
+                print("Optimization completed!")
                 print("="*60)
                 print(f"Total time: {elapsed_time:.2f} seconds")
-                print(f"Best objective value: {optimizer.best_objective_function:.2e}")
+                if hasattr(optimizer, 'best_objective_function'):
+                    print(f"Best objective value: {optimizer.best_objective_function:.2e}")
         
         except Exception as e:
             if self.verbose:
@@ -822,11 +990,19 @@ class BlackBoxOptimizer:
                 print("="*60)
             raise
         
+        # Check if we have valid results
+        if not hasattr(optimizer, 'best_solution') or not hasattr(optimizer, 'best_objective_function'):
+            raise ValueError("Optimization failed to produce valid results")
+        
         # Store results
         self.best_trial = {
             'value': optimizer.best_objective_function,
             'params': self._decode_parameters(optimizer.best_solution)
         }
+        
+        # Save elapsed time if available
+        if not hasattr(optimizer, 'elapsed_time'):
+            optimizer.elapsed_time = end_time - start_time if 'end_time' in locals() else None
         
         if self.verbose:
             print("\nBest parameters found:")
@@ -854,54 +1030,57 @@ class BlackBoxOptimizer:
             if self.verbose:
                 print("\nSaving results to logger...")
             
-            self.logger.log_optimizer_info(
-                algorithm=self.algorithm_name,
-                algorithm_params=self.algorithm_params,
-                n_trials=self.n_trials,
-                timeout=self.timeout
-            )
-            
-            # Log metrics
-            self.logger.log_metrics(
-                0,  # trial number
-                self.best_trial['value'],
-                self.best_trial['params']
-            )
-            
-            # Логируем информацию о BBO алгоритме
-            self.logger.log_bbo_info(
-                algorithm=self.algorithm_name,
-                description=self._get_algorithm_description(self.algorithm_name),
-                params=self.algorithm_params
-            )
-            
-            if self.verbose:
-                print("Results saved successfully")
+            try:
+                self.logger.log_optimizer_info(
+                    algorithm=self.algorithm_name,
+                    description=self._get_algorithm_description(self.algorithm_name),
+                    params=self.algorithm_params
+                )
+                
+                # Выводим топ-10 лучших конфигураций
+                self.logger.print_top_configurations(10)
+                
+                if self.verbose:
+                    print("Results saved successfully")
+            except Exception as e:
+                if self.verbose:
+                    print(f"Error saving results to logger: {str(e)}")
+        
+        # Add optimization history if available
+        optimization_history = None
+        if hasattr(optimizer, 'objective_function_history'):
+            optimization_history = optimizer.objective_function_history
         
         return {
-            'architecture': SPINNArchitecture(
+            'architecture': PINNArchitecture(
                 n_layers=self.best_trial['params']['n_layers'],
                 features=[self.best_trial['params'][f'layer_{i}_size'] for i in range(self.best_trial['params']['n_layers'])],
                 activation=self.best_trial['params']['activation']
             ),
             'lr_adamw': self.best_trial['params']['lr_adamw'],
             'best_error': self.best_trial['value'],
-            'optimization_history': optimizer.objective_function_history,
+            'optimization_history': optimization_history,
             'elapsed_time': optimizer.elapsed_time if hasattr(optimizer, 'elapsed_time') else None
         }
 
     def _get_parameter_names(self) -> List[str]:
         """Returns the list of parameter names for optimization."""
-        return [
-            'n_layers',
-            'layer_size',
+        param_names = ['n_layers']
+        # Add a parameter for each possible layer's size
+        for i in range(5):  # Maximum of 5 layers
+            param_names.append(f'layer_{i}_size')
+        
+        param_names.extend([
+            'activation_index',
             'lr_adamw',
+            'scheduler_type_index',
             'scheduler_factor',
             'scheduler_patience',
             'scheduler_min_lr',
             'scheduler_T_max',
             'scheduler_eta_min'
-        ]
+        ])
+        return param_names
 
     def _decode_parameters(self, x: np.ndarray) -> Dict:
         """Decodes the optimizer's solution vector into parameter dictionary."""
@@ -915,21 +1094,36 @@ class BlackBoxOptimizer:
             
             # Basic parameters
             params['n_layers'] = max(2, min(5, int(round(x[0]))))
-            for i in range(params['n_layers']):
-                params[f'layer_{i}_size'] = max(16, min(128, int(round(x[1]))))
             
-            params['activation'] = np.random.choice(['tanh', 'relu', 'gelu', 'silu'])
-            params['lr_adamw'] = max(1e-4, min(1e-2, x[2]))
+            # Layer sizes - use individual parameters for each layer
+            for i in range(5):  # Maximum of 5 layers
+                if i < params['n_layers']:
+                    params[f'layer_{i}_size'] = max(16, min(128, int(round(x[i+1]))))
+                else:
+                    # Add parameters for unused layers too
+                    params[f'layer_{i}_size'] = 64  # Default value
+            
+            # Activation function - map a continuous parameter to discrete choices
+            activation_options = ['tanh', 'relu', 'gelu', 'silu']
+            activation_idx = min(len(activation_options)-1, max(0, int(round(x[6] * len(activation_options)))))
+            params['activation'] = activation_options[activation_idx]
+            
+            # Learning rate
+            params['lr_adamw'] = max(1e-4, min(1e-2, x[7]))
+            
+            # Scheduler type - map a continuous parameter to discrete choices
+            scheduler_options = ['reduce_on_plateau', 'cosine_annealing', 'none']
+            scheduler_idx = min(len(scheduler_options)-1, max(0, int(round(x[8] * len(scheduler_options)))))
+            params['scheduler_type'] = scheduler_options[scheduler_idx]
             
             # Scheduler parameters
-            params['scheduler_type'] = np.random.choice(['reduce_on_plateau', 'cosine_annealing', 'none'])
             if params['scheduler_type'] == 'reduce_on_plateau':
-                params['scheduler_factor'] = max(0.1, min(0.5, x[3]))
-                params['scheduler_patience'] = max(5, min(20, int(round(x[4]))))
-                params['scheduler_min_lr'] = max(1e-6, min(1e-4, x[5]))
+                params['scheduler_factor'] = max(0.1, min(0.5, x[9]))
+                params['scheduler_patience'] = max(5, min(20, int(round(x[10]))))
+                params['scheduler_min_lr'] = max(1e-6, min(1e-4, x[11]))
             elif params['scheduler_type'] == 'cosine_annealing':
-                params['scheduler_T_max'] = max(50, min(200, int(round(x[6]))))
-                params['scheduler_eta_min'] = max(1e-6, min(1e-4, x[7]))
+                params['scheduler_T_max'] = max(50, min(200, int(round(x[12]))))
+                params['scheduler_eta_min'] = max(1e-6, min(1e-4, x[13]))
             
             return params
             
@@ -938,7 +1132,7 @@ class BlackBoxOptimizer:
 
 def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs):
     print("\n" + "="*50)
-    print("Starting SPINN optimization for Klein-Gordon equation")
+    print("Starting PINN optimization for Klein-Gordon equation")
     print("="*50)
     print("\nConfiguration:")
     print(f"Algorithm: {algorithm.upper()}")
@@ -948,13 +1142,12 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     print(f"NC_TEST (test points): {kwargs['NC_TEST']}")
     print(f"Random seed: {kwargs['SEED']}")
     print(f"Total epochs: {kwargs['EPOCHS']}")
-    print(f"Log interval: {kwargs['LOG_ITER']}")
     print(f"Number of trials: {n_trials}")
     print(f"Timeout: {timeout if timeout else 'None'}")
     
     # Create results logger with algorithm name in directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = f"/home/user/SPINN_PyTorch/results/klein_gordon3d/spinn_clear/{algorithm}_{timestamp}"
+    log_dir = f"/home/user/SPINN_PyTorch/results/klein_gordon3d/pinn_clear/{algorithm}_{timestamp}"
     logger = ResultLogger(log_dir)
     print(f"\nResults will be saved to: {logger.run_dir}")
     
@@ -977,7 +1170,7 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     optimizer = BlackBoxOptimizer(
         n_trials=n_trials,
         timeout=timeout,
-        study_name="spinn_optimization_klein_gordon3d",
+        study_name="pinn_optimization_klein_gordon3d",
         logger=logger,
         algorithm=algorithm,
         algorithm_params=algorithm_params[algorithm],
@@ -1012,18 +1205,18 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     
     print("\nTraining best model with full epochs...")
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = SPINN(results['architecture']).to(device)
-    criterion = SPINN_Loss(model)
+    model = PINN(results['architecture']).to(device)
+    criterion = PINN_Loss(model)
     
     # Create optimizer
     optimizer = optim.AdamW(model.parameters(), lr=results['lr_adamw'])
     
-    train_data = spinn_train_generator_klein_gordon3d(kwargs['NC'], seed=kwargs['SEED'])
+    train_data = pinn_train_generator_klein_gordon3d(kwargs['NC'], seed=kwargs['SEED'])
     train_data = [t.to(device) if isinstance(t, torch.Tensor) else 
                  [tensor.to(device) for tensor in t] if isinstance(t, list) else t 
                  for t in train_data]
     
-    t, x, y, u_gt, tm, xm, ym = spinn_test_generator_klein_gordon3d(kwargs['NC_TEST'])
+    t, x, y, u_gt, tm, xm, ym = pinn_test_generator_klein_gordon3d(kwargs['NC_TEST'])
     t, x, y = t.to(device), x.to(device), y.to(device)
     u_gt = u_gt.to(device)
     tm, xm, ym = tm.to(device), xm.to(device), ym.to(device)
@@ -1044,58 +1237,63 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
         if not yc.requires_grad:
             yc.requires_grad_(True)
         
-        loss_residual = criterion.residual_loss(tc, xc, yc, uc)
-        loss_initial = criterion.initial_loss(ti, xi, yi, ui)
-        loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
-        loss = loss_residual + loss_initial + loss_boundary
-        loss.backward()
-        optimizer.step()
-        
-        # Log results at each step
-        with torch.no_grad():
-            model.eval()
-            u = model(tm.reshape(-1), xm.reshape(-1), ym.reshape(-1))
-            error = relative_l2(u, u_gt.reshape(-1))
+        try:
+            loss_residual = criterion.residual_loss(tc, xc, yc, uc)
+            loss_initial = criterion.initial_loss(ti, xi, yi, ui)
+            loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
+            loss = loss_residual + loss_initial + loss_boundary
+            loss.backward()
+            optimizer.step()
             
-            # Log results
-            logger.log_training(
-                e,
-                {
-                    'total': loss.item(),
-                    'residual': loss_residual.item(),
-                    'initial': loss_initial.item(),
-                    'boundary': loss_boundary.item()
-                },
-                error.item(),
-                'adamw'
-            )
+            # Log results at each step
+            with torch.no_grad():
+                model.eval()
+                u = model(tm.reshape(-1), xm.reshape(-1), ym.reshape(-1))
+                error = relative_l2(u, u_gt.reshape(-1))
+                
+                # Log results
+                logger.log_training(
+                    e,
+                    {
+                        'total': loss.item(),
+                        'residual': loss_residual.item(),
+                        'initial': loss_initial.item(),
+                        'boundary': loss_boundary.item()
+                    },
+                    error.item(),
+                    'adamw'
+                )
+                
+                # Update progress bar
+                pbar.set_description(
+                    f'Loss: {loss.item():.2e} '
+                    f'(R: {loss_residual.item():.2e}, '
+                    f'I: {loss_initial.item():.2e}, '
+                    f'B: {loss_boundary.item():.2e}), '
+                    f'Error: {error.item():.2e}'
+                )
+                
+                # Save plot and model only at LOG_ITER steps
+                if e % kwargs['LOG_ITER'] == 0:
+                    if error < best_error:
+                        best_error = error
+                        u = u.reshape(tm.shape)
+                        plot_klein_gordon3d(tm, xm, ym, u, logger, f"solution_epoch_{e}")
+                        # Save best model
+                        logger.save_model(model, f"best_model_epoch_{e}")
             
-            # Update progress bar
-            pbar.set_description(
-                f'Loss: {loss.item():.2e} '
-                f'(R: {loss_residual.item():.2e}, '
-                f'I: {loss_initial.item():.2e}, '
-                f'B: {loss_boundary.item():.2e}), '
-                f'Error: {error.item():.2e}'
-            )
+            model.train()
             
-            # Save plot and model only at LOG_ITER steps
-            if e % kwargs['LOG_ITER'] == 0:
-                if error < best_error:
-                    best_error = error
-                    u = u.reshape(tm.shape)
-                    plot_klein_gordon3d(tm, xm, ym, u, logger, f"solution_epoch_{e}")
-                    # Save best model
-                    logger.save_model(model, f"best_model_epoch_{e}")
-        
-        model.train()
+        except RuntimeError as e:
+            print(f"Training error at epoch {e}: {str(e)}")
+            print("Skipping this epoch and continuing training")
     
     # Save final model
     logger.save_model(model, "final_model")
     print(f'\nFinal training completed! Best error: {best_error:.2e}')
     print(f'Results saved in: {logger.run_dir}')
 
-def main(NC, NI, NB, NC_TEST, SEED, EPOCHS, LOG_ITER):
+def main(NC, NI, NB, NC_TEST, SEED, EPOCHS):
     # Создаем параметры для алгоритмов
     algorithm_params = {
         'jade': {
@@ -1134,7 +1332,7 @@ def main(NC, NI, NB, NC_TEST, SEED, EPOCHS, LOG_ITER):
         'NC_TEST': NC_TEST,
         'SEED': SEED,
         'EPOCHS': EPOCHS,
-        'LOG_ITER': LOG_ITER
+        'LOG_ITER': 0  # Logging interval for plots and model saving
     }
     
     # Запускаем main с выбранным алгоритмом
@@ -1144,7 +1342,7 @@ if __name__ == '__main__':
     import argparse
     
     # Создаем парсер аргументов командной строки
-    parser = argparse.ArgumentParser(description='SPINN optimization for Klein-Gordon equation')
+    parser = argparse.ArgumentParser(description='PINN optimization for Klein-Gordon equation')
     
     # Добавляем аргументы
     parser.add_argument('--algorithm', type=str, choices=['jade', 'lshade', 'nelder_mead', 'pso', 'grey_wolf', 'whales'],
@@ -1154,8 +1352,7 @@ if __name__ == '__main__':
     parser.add_argument('--nb', type=int, default=100, help='Number of boundary points')
     parser.add_argument('--nc-test', type=int, default=50, help='Number of test points')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
-    parser.add_argument('--log-iter', type=int, default=1000, help='Logging interval')
+    parser.add_argument('--epochs', type=int, default=10000, help='Number of epochs')
     parser.add_argument('--n-trials', type=int, default=150, help='Number of optimization trials')
     parser.add_argument('--timeout', type=int, default=None, help='Optimization timeout in seconds')
     parser.add_argument('--population-size', type=int, default=100, 
@@ -1165,4 +1362,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     # Запускаем main с введенными параметрами
-    main(args.nc, args.ni, args.nb, args.nc_test, args.seed, args.epochs, args.log_iter)
+    main(args.nc, args.ni, args.nb, args.nc_test, args.seed, args.epochs)

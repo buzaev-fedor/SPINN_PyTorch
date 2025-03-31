@@ -3,6 +3,8 @@ import jax.numpy as jnp
 from functools import partial
 from utils.vorticity import velocity_to_vorticity_fwd, velocity_to_vorticity_rev, vorx, vory, vorz
 import pdb
+import numpy as np
+import torch
 
 
 def relative_l2(u, u_gt):
@@ -80,30 +82,83 @@ def _evalnd(apply_fn, params, *test_data):
     return relative_l2(apply_fn(params, t, *x_list), u_gt)
 
 
-def setup_eval_function(model, equation):
-    dim = equation[-2:]
-    if dim == '2d':
-        if equation == 'poisson2d':
-            fn = _eval2d_mask
-        else:
-            fn = _eval2d
-    elif dim == '3d':
-        if model == 'pinn' and equation == 'navier_stokes3d':
-            fn = _eval3d_ns_pinn
-        elif model == 'spinn' and equation == 'navier_stokes3d':
-            fn = _eval3d_ns_spinn
-        else:
-            fn = _eval3d
-    elif dim == '4d':
-        if model == 'pinn':
-            fn = _batch_eval4d
-        if model == 'spinn' and equation == 'navier_stokes4d':
-            fn = _eval_ns4d
-        else:
-            fn = _eval4d
-    elif dim == 'nd':
-        if model == 'spinn':
-            fn = _evalnd
+def calculate_relative_error(pred, true):
+    """Рассчитывает относительную ошибку между предсказанными и истинными значениями."""
+    return torch.norm(pred - true) / torch.norm(true)
+
+
+def flow_mixing3d_exact_solution(t, x, y):
+    """Возвращает точное решение для задачи flow_mixing3d."""
+    # Аналитическое решение для flow_mixing3d
+    # Для нашего случая простая модель диффузии/затухания
+    return torch.sin(np.pi * x) * torch.sin(np.pi * y) * torch.exp(-2 * np.pi**2 * t)
+
+
+def eval_flow_mixing3d(model, *test_data):
+    """Оценивает модель на тестовых данных для задачи flow_mixing3d.
+    
+    Аргументы:
+        model: PyTorch модель для оценки
+        test_data: тензоры, возвращаемые generate_test_data
+            (t, x, y, T, X, Y) - где:
+            t: одномерный тензор с координатами времени
+            x: одномерный тензор с координатами x
+            y: одномерный тензор с координатами y
+            T: трехмерный тензор с сеткой времени (результат meshgrid)
+            X: трехмерный тензор с сеткой x (результат meshgrid)
+            Y: трехмерный тензор с сеткой y (результат meshgrid)
+    
+    Возвращает:
+        float: значение относительной ошибки
+    """
+    # Распаковываем данные и проверяем их наличие
+    print(f"Количество тестовых данных: {len(test_data)}")
+    for i, data in enumerate(test_data):
+        if isinstance(data, torch.Tensor):
+            print(f"test_data[{i}]: форма={data.shape}, тип={data.dtype}")
+    
+    # Проверяем, достаточно ли данных
+    if len(test_data) < 6:
+        raise ValueError(f"Недостаточно тестовых данных. Ожидается 6, получено {len(test_data)}")
+    
+    # Распаковываем данные
+    t, x, y, T, X, Y = test_data
+    
+    # Печатаем размеры
+    print(f"t: {t.shape}, x: {x.shape}, y: {y.shape}")
+    print(f"T: {T.shape}, X: {X.shape}, Y: {Y.shape}")
+    
+    # Вычисляем аналитическое решение
+    u_true = flow_mixing3d_exact_solution(T.reshape(-1), X.reshape(-1), Y.reshape(-1))
+    
+    # Получаем предсказания модели
+    with torch.no_grad():
+        u_pred = model(T.reshape(-1), X.reshape(-1), Y.reshape(-1))
+    
+    # Вычисляем ошибку
+    error = calculate_relative_error(u_pred, u_true)
+    
+    return error.item()
+
+
+def eval_pinn(model, *test_data):
+    """Оценивает PINN на тестовых данных."""
+    return eval_flow_mixing3d(model, *test_data)
+
+
+def eval_spinn(model, *test_data):
+    """Оценивает SPINN на тестовых данных."""
+    return eval_flow_mixing3d(model, *test_data)
+
+
+def setup_eval_function(model_type, equation):
+    """Возвращает подходящую функцию оценки для заданного типа модели и уравнения."""
+    if equation != 'flow_mixing3d':
+        raise ValueError(f"Неизвестное уравнение: {equation}")
+    
+    if model_type == 'pinn':
+        return eval_pinn
+    elif model_type == 'spinn':
+        return eval_spinn
     else:
-        raise NotImplementedError
-    return fn
+        raise ValueError(f"Неизвестный тип модели: {model_type}")

@@ -1,0 +1,27 @@
+[2025-03-07 18:03:40] Starting optimization process for all algorithms
+[2025-03-07 18:03:40] ----------------------------------------
+[2025-03-07 18:03:40] Running jade algorithm
+[2025-03-07 18:03:40] ----------------------------------------
+[2025-03-07 18:03:40] Starting optimization with jade algorithm...
+usage: demo_spinn_pytorch_my_exps.py [-h]
+                                     [--algorithm {jade,lshade,nelder_mead,pso,grey_wolf,whales}]
+                                     [--nc NC] [--ni NI] [--nb NB]
+                                     [--nc-test NC_TEST] [--seed SEED]
+                                     [--epochs EPOCHS] [--n-trials N_TRIALS]
+                                     [--timeout TIMEOUT]
+                                     [--population-size POPULATION_SIZE]
+demo_spinn_pytorch_my_exps.py: error: unrecognized arguments: --log-iter 1001
+[2025-03-07 18:03:43] Successfully completed jade optimization
+[2025-03-07 18:03:48] ----------------------------------------
+[2025-03-07 18:03:48] Running lshade algorithm
+[2025-03-07 18:03:48] ----------------------------------------
+[2025-03-07 18:03:48] Starting optimization with lshade algorithm...
+usage: demo_spinn_pytorch_my_exps.py [-h]
+                                     [--algorithm {jade,lshade,nelder_mead,pso,grey_wolf,whales}]
+                                     [--nc NC] [--ni NI] [--nb NB]
+                                     [--nc-test NC_TEST] [--seed SEED]
+                                     [--epochs EPOCHS] [--n-trials N_TRIALS]
+                                     [--timeout TIMEOUT]
+                                     [--population-size POPULATION_SIZE]
+demo_spinn_pytorch_my_exps.py: error: unrecognized arguments: --log-iter 1001
+[2025-03-07 18:03:50] Successfully completed lshade optimization

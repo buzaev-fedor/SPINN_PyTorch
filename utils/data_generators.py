@@ -3,6 +3,8 @@ from utils.data_utils import *
 
 import jax
 import scipy.io
+import numpy as np
+import torch
 
 
 #========================== diffusion equation 3-d =========================#
@@ -532,69 +534,132 @@ def _spinn_train_generator_poisson2d(nx, key):
     return xc1_mult, yc1_mult, xc2_mult, yc2_mult, xb, yb
 
 
-def generate_train_data(args, key, result_dir=None):
-    eqn = args.equation
-    if args.model == 'pinn':
-        if eqn == 'diffusion3d':
-            data = _pinn_train_generator_diffusion3d(
-                args.nc, key
-            )
-        elif eqn == 'helmholtz3d':
-            data = _pinn_train_generator_helmholtz3d(
-                args.a1, args.a2, args.a3, args.nc, key
-            )
-        elif eqn == 'klein_gordon3d':
-            data = _pinn_train_generator_klein_gordon3d(
-                args.nc, args.k, key
-            )
-        elif eqn == 'klein_gordon4d':
-            data = _pinn_train_generator_klein_gordon4d(
-                args.nc, args.k, key
-            )
-        elif eqn == 'flow_mixing3d':
-            data = _pinn_train_generator_flow_mixing3d(
-                args.nc, args.vmax, key
-            )
-        else:
-            raise NotImplementedError
-    elif args.model == 'spinn':
-        if eqn == 'diffusion3d':
-            data = _spinn_train_generator_diffusion3d(
-                args.nc, key
-            )
-        elif eqn == 'helmholtz3d':
-            data = _spinn_train_generator_helmholtz3d(
-                args.a1, args.a2, args.a3, args.nc, key
-            )
-        elif eqn == 'klein_gordon3d':
-            data = _spinn_train_generator_klein_gordon3d(
-                args.nc, args.k, key
-            )
-        elif eqn == 'klein_gordon4d':
-            data = _spinn_train_generator_klein_gordon4d(
-                args.nc, args.k, key
-            )
-        elif eqn == 'navier_stokes3d':
-            data = _spinn_train_generator_navier_stokes3d(
-                args.nt, args.nxy, args.data_dir, result_dir, args.marching_steps, args.step_idx, args.offset_num, key
-            )
-        elif eqn == 'navier_stokes4d':
-            data = _spinn_train_generator_navier_stokes4d(
-                args.nc, args.nu, key
-            )
-        elif eqn == 'flow_mixing3d':
-            data = _spinn_train_generator_flow_mixing3d(
-                args.nc, args.vmax, key
-            )
-        elif eqn == 'poisson2d':
-            data = _spinn_train_generator_poisson2d(
-                args.nc, key
-            )
-        else:
-            raise NotImplementedError
+def generate_train_data(args, seed=None):
+    """Генерирует тренировочные данные для задачи flow_mixing3d."""
+    if seed is not None:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
     else:
-        raise NotImplementedError
-    return data
+        # Используем seed из args, если не указан явно
+        torch.manual_seed(args.seed)
+        np.random.seed(args.seed)
+    
+    # Количество точек для каждого набора данных
+    nc = args.nc  # для коллокации
+    n_boundary = nc // 2  # для границ
+    
+    # Параметры PDE
+    vmax = args.vmax
+    
+    # Области определения переменных
+    t_min, t_max = 0.0, 1.0
+    x_min, x_max = 0.0, 1.0
+    y_min, y_max = 0.0, 1.0
+    
+    # Точки коллокации
+    tc = torch.rand(nc) * (t_max - t_min) + t_min
+    xc = torch.rand(nc) * (x_max - x_min) + x_min
+    yc = torch.rand(nc) * (y_max - y_min) + y_min
+    
+    # Начальные точки (t=0)
+    ti = torch.zeros(nc)
+    xi = torch.rand(nc) * (x_max - x_min) + x_min
+    yi = torch.rand(nc) * (y_max - y_min) + y_min
+    
+    # Аналитическое решение для начальных условий
+    ui = torch.sin(np.pi * xi) * torch.sin(np.pi * yi)
+    
+    # Граничные точки
+    # 4 границы: x=0, x=1, y=0, y=1
+    tb = [torch.rand(n_boundary) * (t_max - t_min) + t_min for _ in range(4)]
+    
+    # Координаты для границ
+    xb = [
+        torch.zeros(n_boundary),  # x=0
+        torch.ones(n_boundary),   # x=1
+        torch.rand(n_boundary) * (x_max - x_min) + x_min,  # случайные x для y=0
+        torch.rand(n_boundary) * (x_max - x_min) + x_min   # случайные x для y=1
+    ]
+    
+    yb = [
+        torch.rand(n_boundary) * (y_max - y_min) + y_min,  # случайные y для x=0
+        torch.rand(n_boundary) * (y_max - y_min) + y_min,  # случайные y для x=1
+        torch.zeros(n_boundary),  # y=0
+        torch.ones(n_boundary)    # y=1
+    ]
+    
+    # Граничное условие - нулевое значение функции
+    ub = [torch.zeros_like(tb[i]) for i in range(4)]
+    
+    # Коэффициенты для уравнения переноса (a * u_x + b * u_y + u_t = 0)
+    a = torch.ones_like(tc) * vmax  # примерный коэффициент для x-направления
+    b = torch.ones_like(tc) * vmax  # примерный коэффициент для y-направления
+    
+    return tc, xc, yc, ti, xi, yi, ui, tb, xb, yb, ub, a, b
+
+
+def generate_test_data_pytorch(args, save_dir=None):
+    """Генерирует тестовые данные и, при необходимости, сохраняет их."""
+    # Параметры сетки
+    nc_test = args.nc_test
+    
+    # Области определения переменных
+    t_min, t_max = 0.0, 1.0
+    x_min, x_max = 0.0, 1.0
+    y_min, y_max = 0.0, 1.0
+    
+    # Создаем равномерную сетку для тестовых точек
+    t = torch.linspace(t_min, t_max, nc_test)
+    x = torch.linspace(x_min, x_max, nc_test)
+    y = torch.linspace(y_min, y_max, nc_test)
+    
+    print(f"generate_test_data_pytorch: создаем сетку размером {nc_test}x{nc_test}x{nc_test}")
+    print(f"t: {t.shape}, x: {x.shape}, y: {y.shape}")
+    
+    # Создаем трехмерную сетку
+    try:
+        T, X, Y = torch.meshgrid(t, x, y, indexing='ij')
+        print(f"Сетка создана успешно!")
+        print(f"T: {T.shape}, X: {X.shape}, Y: {Y.shape}")
+    except Exception as e:
+        print(f"Ошибка при создании сетки: {e}")
+        # Попробуем без параметра indexing
+        try:
+            T, X, Y = torch.meshgrid(t, x, y)
+            print(f"Сетка создана без параметра indexing!")
+            print(f"T: {T.shape}, X: {X.shape}, Y: {Y.shape}")
+        except Exception as e:
+            print(f"Повторная ошибка при создании сетки: {e}")
+            # Создаем вручную
+            T = t.reshape(-1, 1, 1).expand(nc_test, nc_test, nc_test)
+            X = x.reshape(1, -1, 1).expand(nc_test, nc_test, nc_test)
+            Y = y.reshape(1, 1, -1).expand(nc_test, nc_test, nc_test)
+            print(f"Сетка создана вручную!")
+            print(f"T: {T.shape}, X: {X.shape}, Y: {Y.shape}")
+    
+    # Если указана директория для сохранения, сохраняем тестовые данные
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        np.savez(
+            os.path.join(save_dir, 'test_data.npz'),
+            t=t.numpy(),
+            x=x.numpy(),
+            y=y.numpy(),
+            T=T.numpy(),
+            X=X.numpy(),
+            Y=Y.numpy()
+        )
+    
+    # Проверяем и выводим информацию о возвращаемых данных
+    result = (t, x, y, T, X, Y)
+    print(f"generate_test_data_pytorch: возвращает {len(result)} элементов")
+    for i, tensor in enumerate(result):
+        if isinstance(tensor, torch.Tensor):
+            print(f"result[{i}]: тип={type(tensor).__name__}, форма={tensor.shape}, размер={tensor.numel()}")
+    
+    # Возвращаем все необходимые тензоры для оценки модели
+    # Обратите внимание: функция eval_flow_mixing3d ожидает model, t, x, y, T, X, Y
+    return result
 
 
 #============================== test dataset ===============================#

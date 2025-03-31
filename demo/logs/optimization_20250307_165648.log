@@ -1,0 +1,11 @@
+[2025-03-07 16:56:48] Starting optimization process for all algorithms
+[2025-03-07 16:56:48] ----------------------------------------
+[2025-03-07 16:56:48] Running jade algorithm
+[2025-03-07 16:56:48] ----------------------------------------
+[2025-03-07 16:56:48] Starting optimization with jade algorithm...
+Traceback (most recent call last):
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 11, in <module>
+    import pandas as pd  # Добавляем импорт pandas
+    ^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'pandas'
+[2025-03-07 16:56:49] Successfully completed jade optimization

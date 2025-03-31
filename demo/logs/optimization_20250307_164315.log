@@ -1,0 +1,132 @@
+[2025-03-07 16:43:15] Starting optimization process for all algorithms
+[2025-03-07 16:43:15] ----------------------------------------
+[2025-03-07 16:43:15] Running jade algorithm
+[2025-03-07 16:43:15] ----------------------------------------
+[2025-03-07 16:43:15] Starting optimization with jade algorithm...
+/home/user/miniconda3/lib/python3.12/site-packages/torch/autograd/graph.py:823: UserWarning: Attempting to run cuBLAS, but there was no current CUDA context! Attempting to set the primary context... (Triggered internally at /pytorch/aten/src/ATen/cuda/CublasHandlePool.cpp:180.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+
+==================================================
+Starting SPINN optimization for Klein-Gordon equation
+==================================================
+
+Configuration:
+Algorithm: JADE
+NC (collocation points): 1000
+NI (initial points): 100
+NB (boundary points): 100
+NC_TEST (test points): 50
+Random seed: 42
+Total epochs: 10000
+Log interval: 1001
+Number of trials: 150
+Timeout: None
+
+Results will be saved to: /home/user/SPINN_PyTorch/results/klein_gordon3d/spinn_clear/jade_20250307_164317
+Run parameters saved to run_params.json
+
+============================================================
+Initializing JADE optimizer
+============================================================
+Algorithm description:
+JADE (Adaptive Differential Evolution) - Адаптивный алгоритм дифференциальной эволюции. Автоматически адаптирует параметры мутации и скрещивания. Эффективен для непрерывной оптимизации и хорошо масштабируется.
+------------------------------------------------------------
+Configuration:
+  Number of trials: 150
+  Timeout: None
+  Algorithm parameters: {'population_size': 100, 'c': 0.1, 'p': 0.05}
+------------------------------------------------------------
+
+Starting optimization process...
+
+============================================================
+Starting optimization process
+============================================================
+Parameter bounds:
+  n_layers            : (2, 5)
+  layer_size          : (16, 128)
+  lr_adamw            : (0.0001, 0.01)
+  scheduler_factor    : (0.1, 0.5)
+  scheduler_patience  : (5, 20)
+  scheduler_min_lr    : (1e-06, 0.0001)
+  scheduler_T_max     : (50, 200)
+  scheduler_eta_min   : (1e-06, 0.0001)
+------------------------------------------------------------
+
+Initializing JADE optimizer...
+
+Starting optimization...
+
+------------------------------------------------------------
+Trial 1/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [122, 122, 122]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 7.35e-03
+  Scheduler: none
+
+Training for 10000 epochs...
+
+************************************************************
+New best error found: 2.54e-02
+************************************************************
+
+Trial 1 completed:
+  Current error: 2.54e-02
+  Best error so far: 2.54e-02
+
+============================================================
+Optimization failed!
+Error: Object of type float32 is not JSON serializable
+============================================================
+Traceback (most recent call last):
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 1299, in <module>
+    main(args.nc, args.ni, args.nb, args.nc_test, args.seed, args.epochs, args.log_iter)
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 1272, in main
+    main_with_algorithm(args.algorithm, args.n_trials, args.timeout, algorithm_params=algorithm_params, **params)
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 1126, in main_with_algorithm
+    results = optimizer.optimize(kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 934, in optimize
+    optimizer.run_minimize()
+  File "/home/user/SPINN_PyTorch/bbo_utils/optimizer.py", line 30, in run_minimize
+    self.minimize()
+  File "/home/user/SPINN_PyTorch/bbo_utils/jade.py", line 87, in minimize
+    self.initialize_population(lower_bound, upper_bound)
+  File "/home/user/SPINN_PyTorch/bbo_utils/jade.py", line 31, in initialize_population
+    fitness_tensor = torch.tensor([self.fitness_function(ind) for ind in population_tensor])
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/SPINN_PyTorch/bbo_utils/optimizer.py", line 20, in wrapped_func
+    return original_func(x)
+           ^^^^^^^^^^^^^^^^
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 912, in objective
+    return self.objective_function(self._decode_parameters(x))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 872, in objective_function
+    self.logger.log_trial(
+  File "/home/user/SPINN_PyTorch/demo/demo_spinn_pytorch_my_exps.py", line 360, in log_trial
+    json.dump(trial_data, f, indent=2)
+  File "/home/user/miniconda3/lib/python3.12/json/__init__.py", line 179, in dump
+    for chunk in iterable:
+                 ^^^^^^^^
+  File "/home/user/miniconda3/lib/python3.12/json/encoder.py", line 432, in _iterencode
+    yield from _iterencode_dict(o, _current_indent_level)
+  File "/home/user/miniconda3/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/home/user/miniconda3/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
+    yield from chunks
+  File "/home/user/miniconda3/lib/python3.12/json/encoder.py", line 439, in _iterencode
+    o = _default(o)
+        ^^^^^^^^^^^
+  File "/home/user/miniconda3/lib/python3.12/json/encoder.py", line 180, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type float32 is not JSON serializable
+[2025-03-07 16:48:03] Successfully completed jade optimization
+[2025-03-07 16:48:08] ----------------------------------------
+[2025-03-07 16:48:08] Running lshade algorithm
+[2025-03-07 16:48:08] ----------------------------------------
+[2025-03-07 16:48:08] Starting optimization with lshade algorithm...
