@@ -97,7 +97,7 @@ class ResultLogger:
                     'epoch': int(entry['epoch']),
                     'total_loss': float(entry['total_loss']),
                     'residual_loss': float(entry['residual_loss']),
-                    'initial_loss': float(entry['initial_loss']),
+                    'initial_loss': float(entry.get('initial_loss', 0.0)),
                     'boundary_loss': float(entry['boundary_loss']),
                     'error': float(entry['error']),
                     'learning_rate': float(entry['learning_rate'])
@@ -238,7 +238,7 @@ class ResultLogger:
                 'epoch': epoch,
                 'total_loss': losses['total'],
                 'residual_loss': losses['residual'],
-                'initial_loss': losses['initial'],
+                'initial_loss': losses.get('initial', 0.0),
                 'boundary_loss': losses['boundary'],
                 'error': error
             }])
@@ -252,7 +252,7 @@ class ResultLogger:
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
                 'total_loss': losses['total'],
                 'residual_loss': losses['residual'],
-                'initial_loss': losses['initial'],
+                'initial_loss': losses.get('initial', 0.0),
                 'boundary_loss': losses['boundary'],
                 'error': error,
                 'optimizer_type': optimizer_type,

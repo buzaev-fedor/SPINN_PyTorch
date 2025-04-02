@@ -1,5 +1,5 @@
 from functools import partial
-
+import torch
 import jax
 import jax.numpy as jnp
 
@@ -75,6 +75,22 @@ def navier_stokes4d_exact_u(t, x, y, z, nu):
 # 3d time-dependent flow-mixing exact solution
 def flow_mixing3d_exact_u(t, x, y, omega):
     return -jnp.tanh((y/2)*jnp.cos(omega*t) - (x/2)*jnp.sin(omega*t))
+
+
+def flow_mixing3d_exact_u_pytorch(t, x, y, omega):
+    """
+    Вычисляет точное решение для задачи Flow Mixing 3D.
+    
+    Параметры:
+    t (torch.Tensor): время
+    x (torch.Tensor): x-координата
+    y (torch.Tensor): y-координата
+    omega (torch.Tensor или float): параметр вращения
+    
+    Возвращает:
+    torch.Tensor: значение функции u в точках (t, x, y)
+    """
+    return -torch.tanh((y/2)*torch.cos(omega*t) - (x/2)*torch.sin(omega*t))
 
 
 # 3d time-dependent flow-mixing parameters
