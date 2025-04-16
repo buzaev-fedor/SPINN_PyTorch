@@ -2,3 +2,9 @@ results/**
 **.pyc
 navier_stokes3d_video.py
 ns_video.ipynb
+**.log
+*.log
+*.log.*
+*.log.*.*
+*.log.*.*.*
+*.log.*.*.*.*

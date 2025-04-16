@@ -159,7 +159,9 @@ class BlackBoxOptimizer:
                      for t in train_data]
         
         test_data = self.generate_test_data(params)
-        test_data = [t.to(device) for t in test_data]
+        test_data = [t.to(device) if isinstance(t, torch.Tensor) else 
+                    [tensor.to(device) for tensor in t] if isinstance(t, list) else t 
+                    for t in test_data]
         
         # Train model with specified epochs
         n_epochs = params['EPOCHS']
@@ -262,7 +264,15 @@ class BlackBoxOptimizer:
             
             # Run optimization with or without timeout
             if self.timeout is not None:
-                optimizer.run_minimize_with_timeout(self.timeout)
+                if hasattr(optimizer, 'run_minimize_with_timeout'):
+                    optimizer.run_minimize_with_timeout(self.timeout)
+                else:
+                    # Если метод не реализован, используем стандартный run_minimize
+                    # и контролируем время выполнения
+                    start_optimize_time = time.time()
+                    optimizer.run_minimize()
+                    if time.time() - start_optimize_time > self.timeout:
+                        print(f"Warning: Optimization took longer than timeout ({self.timeout} seconds)")
             else:
                 optimizer.run_minimize()
             

@@ -332,3 +332,1101 @@ Current parameters:
     AdamW lr: 4.16e-03
   Scheduler: cosine_annealing
     Parameters:
+      T_max: 93
+      Eta min: 1.70e-05
+
+Training for 1000 epochs...
+
+Trial 14 completed:
+  Current error: 2.30e-01
+  Best error so far: 2.30e-01
+
+------------------------------------------------------------
+Trial 15/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 5
+    Layer sizes: [107, 107, 107, 107, 107]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 6.37e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 184
+      Eta min: 5.44e-05
+
+Training for 1000 epochs...
+
+Trial 15 completed:
+  Current error: 2.37e-01
+  Best error so far: 2.30e-01
+
+------------------------------------------------------------
+Trial 16/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [116, 116, 116, 116]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 3.25e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.14
+      Patience: 8
+      Min lr: 4.33e-05
+
+Training for 1000 epochs...
+
+Trial 16 completed:
+  Current error: 1.01e+00
+  Best error so far: 2.30e-01
+
+------------------------------------------------------------
+Trial 17/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [73, 73]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 4.23e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 191
+      Eta min: 3.30e-05
+
+Training for 1000 epochs...
+
+Trial 17 completed:
+  Current error: 2.77e-01
+  Best error so far: 2.30e-01
+
+------------------------------------------------------------
+Trial 18/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [95, 95, 95, 95]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 3.70e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.49
+      Patience: 19
+      Min lr: 2.59e-05
+
+Training for 1000 epochs...
+
+Trial 18 completed:
+  Current error: 8.05e-01
+  Best error so far: 2.30e-01
+
+------------------------------------------------------------
+Trial 19/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [20, 20, 20]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 6.13e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.30
+      Patience: 6
+      Min lr: 2.86e-05
+
+Training for 1000 epochs...
+
+Trial 19 completed:
+  Current error: 1.00e+00
+  Best error so far: 2.30e-01
+
+------------------------------------------------------------
+Trial 20/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [71, 71]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 9.86e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.20
+      Patience: 15
+      Min lr: 7.64e-05
+
+Training for 1000 epochs...
+
+Trial 20 completed:
+  Current error: 9.19e-01
+  Best error so far: 2.30e-01
+
+------------------------------------------------------------
+Trial 21/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [87, 87, 87]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 6.37e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 98
+      Eta min: 1.95e-05
+
+Training for 1000 epochs...
+
+************************************************************
+New best error found: 2.23e-01
+************************************************************
+
+Trial 21 completed:
+  Current error: 2.23e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 22/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [82, 82]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 6.81e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 147
+      Eta min: 1.83e-05
+
+Training for 1000 epochs...
+
+Trial 22 completed:
+  Current error: 2.73e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 23/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [59, 59, 59, 59]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 9.37e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 23 completed:
+  Current error: 2.39e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 24/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [90, 90, 90]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 8.19e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 24 completed:
+  Current error: 2.30e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 25/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 5
+    Layer sizes: [87, 87, 87, 87, 87]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 3.46e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 183
+      Eta min: 7.82e-05
+
+Training for 1000 epochs...
+
+Trial 25 completed:
+  Current error: 3.00e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 26/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [25, 25, 25, 25]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 1.70e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 26 completed:
+  Current error: 1.00e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 27/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [34, 34]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 5.53e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 157
+      Eta min: 2.45e-05
+
+Training for 1000 epochs...
+
+Trial 27 completed:
+  Current error: 2.83e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 28/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [100, 100, 100]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 6.53e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.44
+      Patience: 15
+      Min lr: 5.73e-05
+
+Training for 1000 epochs...
+
+Trial 28 completed:
+  Current error: 3.63e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 29/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [43, 43, 43]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 9.73e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 29 completed:
+  Current error: 1.12e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 30/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [71, 71, 71, 71]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 2.03e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.39
+      Patience: 9
+      Min lr: 3.41e-06
+
+Training for 1000 epochs...
+
+Trial 30 completed:
+  Current error: 1.03e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 31/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 5
+    Layer sizes: [123, 123, 123, 123, 123]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 9.16e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 114
+      Eta min: 9.67e-05
+
+Training for 1000 epochs...
+
+Trial 31 completed:
+  Current error: 1.01e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 32/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 5
+    Layer sizes: [112, 112, 112, 112, 112]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 3.02e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 75
+      Eta min: 5.61e-05
+
+Training for 1000 epochs...
+
+Trial 32 completed:
+  Current error: 1.00e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 33/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [128, 128, 128]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 1.00e-02
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.34
+      Patience: 5
+      Min lr: 1.64e-05
+
+Training for 1000 epochs...
+
+Trial 33 completed:
+  Current error: 1.00e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 34/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [95, 95]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 1.90e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 34 completed:
+  Current error: 2.54e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 35/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [75, 75, 75]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 4.38e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 35 completed:
+  Current error: 2.59e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 36/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [128, 128, 128]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 3.56e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.32
+      Patience: 14
+      Min lr: 5.60e-06
+
+Training for 1000 epochs...
+
+Trial 36 completed:
+  Current error: 1.01e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 37/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [122, 122]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 9.66e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 37 completed:
+  Current error: 1.00e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 38/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [38, 38]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 4.40e-04
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 156
+      Eta min: 5.25e-05
+
+Training for 1000 epochs...
+
+Trial 38 completed:
+  Current error: 5.82e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 39/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [37, 37, 37, 37]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 7.07e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.41
+      Patience: 14
+      Min lr: 8.96e-05
+
+Training for 1000 epochs...
+
+Trial 39 completed:
+  Current error: 1.02e+00
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 40/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [43, 43]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 5.48e-04
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 40 completed:
+  Current error: 3.97e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 41/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [93, 93, 93]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 5.34e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.49
+      Patience: 9
+      Min lr: 9.11e-05
+
+Training for 1000 epochs...
+
+Trial 41 completed:
+  Current error: 4.89e-01
+  Best error so far: 2.23e-01
+
+------------------------------------------------------------
+Trial 42/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [107, 107]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 5.83e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+************************************************************
+New best error found: 2.04e-01
+************************************************************
+
+Trial 42 completed:
+  Current error: 2.04e-01
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 43/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 5
+    Layer sizes: [86, 86, 86, 86, 86]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 3.38e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.36
+      Patience: 11
+      Min lr: 3.32e-05
+
+Training for 1000 epochs...
+
+Trial 43 completed:
+  Current error: 7.57e-01
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 44/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [69, 69, 69]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 3.38e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 141
+      Eta min: 4.68e-05
+
+Training for 1000 epochs...
+
+Trial 44 completed:
+  Current error: 1.15e+00
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 45/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [93, 93, 93, 93]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 1.62e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 81
+      Eta min: 5.13e-05
+
+Training for 1000 epochs...
+
+Trial 45 completed:
+  Current error: 1.03e+00
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 46/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [44, 44, 44]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 4.16e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 46 completed:
+  Current error: 2.90e-01
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 47/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 5
+    Layer sizes: [107, 107, 107, 107, 107]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 6.30e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.45
+      Patience: 17
+      Min lr: 1.54e-05
+
+Training for 1000 epochs...
+
+Trial 47 completed:
+  Current error: 1.04e+00
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 48/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [70, 70]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 6.76e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 82
+      Eta min: 5.92e-06
+
+Training for 1000 epochs...
+
+Trial 48 completed:
+  Current error: 3.09e-01
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 49/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [101, 101, 101]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 4.40e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 179
+      Eta min: 3.30e-05
+
+Training for 1000 epochs...
+
+Trial 49 completed:
+  Current error: 2.76e-01
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 50/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [123, 123]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 8.65e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 50 completed:
+  Current error: 2.30e-01
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 51/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [101, 101, 101]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 6.13e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 186
+      Eta min: 3.28e-05
+
+Training for 1000 epochs...
+
+Trial 51 completed:
+  Current error: 1.09e+00
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 52/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [86, 86]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 9.86e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.23
+      Patience: 13
+      Min lr: 2.35e-05
+
+Training for 1000 epochs...
+
+Trial 52 completed:
+  Current error: 1.00e+00
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 53/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [87, 87, 87]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 6.37e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.36
+      Patience: 6
+      Min lr: 7.12e-05
+
+Training for 1000 epochs...
+
+Trial 53 completed:
+  Current error: 8.74e-01
+  Best error so far: 2.04e-01
+
+------------------------------------------------------------
+Trial 54/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [82, 82]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 6.81e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+************************************************************
+New best error found: 1.95e-01
+************************************************************
+
+Trial 54 completed:
+  Current error: 1.95e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 55/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [59, 59, 59, 59]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 9.37e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 55 completed:
+  Current error: 1.06e+00
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 56/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [106, 106, 106]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 8.19e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.32
+      Patience: 11
+      Min lr: 2.49e-05
+
+Training for 1000 epochs...
+
+Trial 56 completed:
+  Current error: 1.06e+00
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 57/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [97, 97]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 9.79e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 57 completed:
+  Current error: 2.62e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 58/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [42, 42, 42, 42]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 8.19e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.46
+      Patience: 14
+      Min lr: 1.30e-05
+
+Training for 1000 epochs...
+
+Trial 58 completed:
+  Current error: 8.42e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 59/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [34, 34, 34]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 4.77e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 59 completed:
+  Current error: 3.17e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 60/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [100, 100, 100]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 6.53e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 64
+      Eta min: 3.74e-05
+
+Training for 1000 epochs...
+
+Trial 60 completed:
+  Current error: 2.69e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 61/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [73, 73]
+    Activation: silu
+  Optimizers:
+    AdamW lr: 9.73e-03
+  Scheduler: cosine_annealing
+    Parameters:
+      T_max: 169
+      Eta min: 5.08e-05
+
+Training for 1000 epochs...
+
+Trial 61 completed:
+  Current error: 2.65e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 62/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 4
+    Layer sizes: [56, 56, 56, 56]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 2.03e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.39
+      Patience: 14
+      Min lr: 3.41e-06
+
+Training for 1000 epochs...
+
+Trial 62 completed:
+  Current error: 1.01e+00
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 63/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [113, 113, 113]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 9.16e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.10
+      Patience: 5
+      Min lr: 9.29e-05
+
+Training for 1000 epochs...
+
+Trial 63 completed:
+  Current error: 6.70e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 64/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 5
+    Layer sizes: [112, 112, 112, 112, 112]
+    Activation: gelu
+  Optimizers:
+    AdamW lr: 7.10e-03
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.25
+      Patience: 18
+      Min lr: 4.88e-05
+
+Training for 1000 epochs...
+
+Trial 64 completed:
+  Current error: 8.29e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 65/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [91, 91, 91]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 7.89e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 65 completed:
+  Current error: 2.78e-01
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 66/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 3
+    Layer sizes: [121, 121, 121]
+    Activation: relu
+  Optimizers:
+    AdamW lr: 8.39e-03
+  Scheduler: none
+
+Training for 1000 epochs...
+
+Trial 66 completed:
+  Current error: 1.00e+00
+  Best error so far: 1.95e-01
+
+------------------------------------------------------------
+Trial 67/150
+------------------------------------------------------------
+Current parameters:
+  Architecture:
+    Layers: 2
+    Layer sizes: [102, 102]
+    Activation: tanh
+  Optimizers:
+    AdamW lr: 1.00e-02
+  Scheduler: reduce_on_plateau
+    Parameters:
+      Factor: 0.22
+      Patience: 14
+      Min lr: 6.74e-05
+
+Training for 1000 epochs...

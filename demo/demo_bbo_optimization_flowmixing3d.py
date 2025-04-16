@@ -116,44 +116,11 @@ class SPINN(nn.Module):
         output = self.final_layer(combined)
         return output.squeeze(-1)
 
-# Функция для вычисления производных второго порядка
-def compute_second_derivative(u, x):
-    """Вычисляет вторую производную du/dx."""
-    # Убеждаемся, что x требует градиентов
-    if not x.requires_grad:
-        x.requires_grad_(True)
-    
-    # Вычисляем первую производную
-    du_dx = torch.autograd.grad(
-        u, x,
-        grad_outputs=torch.ones_like(u),
-        create_graph=True,
-        retain_graph=True,
-        allow_unused=True
-    )[0]
-    
-    if du_dx is None:
-        return torch.zeros_like(x)
-    
-    # Вычисляем вторую производную
-    d2u_dx2 = torch.autograd.grad(
-        du_dx, x,
-        grad_outputs=torch.ones_like(du_dx),
-        create_graph=True,
-        retain_graph=True,
-        allow_unused=True
-    )[0]
-    
-    if d2u_dx2 is None:
-        return torch.zeros_like(x)
-    
-    return d2u_dx2
-
 class SPINN_Loss:
     def __init__(self, model):
         self.model = model
 
-    def residual_loss(self, t, x, y, source_term):
+    def residual_loss(self, t, x, y, a, b):
         # Убеждаемся, что входные тензоры требуют градиентов
         if not t.requires_grad:
             t.requires_grad_(True)
@@ -162,18 +129,47 @@ class SPINN_Loss:
         if not y.requires_grad:
             y.requires_grad_(True)
         
-        # Получаем выход модели и убеждаемся, что он требует градиентов
+        # Получаем выход модели
         u = self.model(t, x, y)
         if not u.requires_grad:
             u.requires_grad_(True)
         
         # Вычисляем производные
-        utt = compute_second_derivative(u, t)
-        uxx = compute_second_derivative(u, x)
-        uyy = compute_second_derivative(u, y)
+        ut = torch.autograd.grad(
+            u, t,
+            grad_outputs=torch.ones_like(u),
+            create_graph=True,
+            retain_graph=True,
+            allow_unused=True
+        )[0]
         
-        # Вычисляем невязку
-        residual = utt - uxx - uyy + u**2 - source_term
+        if ut is None:
+            return torch.zeros_like(t)
+            
+        ux = torch.autograd.grad(
+            u, x,
+            grad_outputs=torch.ones_like(u),
+            create_graph=True,
+            retain_graph=True,
+            allow_unused=True
+        )[0]
+        
+        if ux is None:
+            return torch.zeros_like(x)
+            
+        uy = torch.autograd.grad(
+            u, y,
+            grad_outputs=torch.ones_like(u),
+            create_graph=True,
+            retain_graph=True,
+            allow_unused=True
+        )[0]
+        
+        if uy is None:
+            return torch.zeros_like(y)
+        
+        # Вычисляем невязку для flow mixing: u_t + a*u_x + b*u_y = 0
+        residual = ut + a*ux + b*uy
         return torch.mean(residual**2)
 
     def initial_loss(self, t, x, y, u_true):
@@ -188,80 +184,64 @@ class SPINN_Loss:
         return loss / len(t)
 
     def __call__(self, *train_data):
-        tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
+        tc, xc, yc, ti, xi, yi, ui, tb, xb, yb, ub, a, b = train_data
         
-        loss_residual = self.residual_loss(tc, xc, yc, uc)
+        loss_residual = self.residual_loss(tc, xc, yc, a, b)
         loss_initial = self.initial_loss(ti, xi, yi, ui)
         loss_boundary = self.boundary_loss(tb, xb, yb, ub)
         
         return loss_residual + loss_initial + loss_boundary
 
-# Функция шага оптимизации
-def update_model(model, optimizer, train_data):
-    optimizer.zero_grad()
-    loss = spinn_loss_klein_gordon3d(model, *train_data)
-    loss.backward()
-    optimizer.step()
-    return loss.item()
+# Точное решение уравнения переноса (Flow Mixing)
+def _flow_mixing3d_exact_u(t, x, y, a=1.0, b=1.0):
+    return torch.sin(np.pi * (x - a*t)) * torch.sin(np.pi * (y - b*t))
 
-
-    # Точное решение уравнения Кляйна-Гордона
-def _klein_gordon3d_exact_u(t, x, y):
-    return (x + y) * torch.cos(2*t) + (x * y) * torch.sin(2*t)
-
-# Источниковый член уравнения Кляйна-Гордона
-def _klein_gordon3d_source_term(t, x, y):
-    u = _klein_gordon3d_exact_u(t, x, y)
-    return u**2 - 4*u
-
-# Генератор тренировочных данных
-def spinn_train_generator_klein_gordon3d(nc, seed=None):
+# Генератор тренировочных данных для Flow Mixing
+def spinn_train_generator_flow_mixing3d(nc, a=1.0, b=1.0, seed=None):
     if seed is not None:
         torch.manual_seed(seed)
     
     # Точки коллокации
-    tc = torch.rand(nc) * 10.0
-    xc = torch.rand(nc) * 2.0 - 1.0
-    yc = torch.rand(nc) * 2.0 - 1.0
-    uc = _klein_gordon3d_source_term(tc, xc, yc)
+    tc = torch.rand(nc) * 1.0
+    xc = torch.rand(nc) * 1.0
+    yc = torch.rand(nc) * 1.0
     
-    # Начальные точки
+    # Начальные точки (t=0)
     ti = torch.zeros(nc)
-    xi = torch.rand(nc) * 2.0 - 1.0
-    yi = torch.rand(nc) * 2.0 - 1.0
-    ui = _klein_gordon3d_exact_u(ti, xi, yi)
+    xi = torch.rand(nc) * 1.0
+    yi = torch.rand(nc) * 1.0
+    ui = _flow_mixing3d_exact_u(ti, xi, yi, a, b)
     
     # Граничные точки
     tb = [tc] * 4
-    xb = [torch.full_like(tc, -1.0),
+    xb = [torch.full_like(tc, 0.0),
           torch.full_like(tc, 1.0),
           xc,
           xc]
     yb = [yc,
           yc,
-          torch.full_like(tc, -1.0),
+          torch.full_like(tc, 0.0),
           torch.full_like(tc, 1.0)]
     
-    ub = [_klein_gordon3d_exact_u(tb[i], xb[i], yb[i]) for i in range(4)]
+    ub = [_flow_mixing3d_exact_u(tb[i], xb[i], yb[i], a, b) for i in range(4)]
     
-    return tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub
+    return tc, xc, yc, ti, xi, yi, ui, tb, xb, yb, ub, a, b
 
-# Генератор тестовых данных
-def spinn_test_generator_klein_gordon3d(nc_test):
-    t = torch.linspace(0, 10, nc_test)
-    x = torch.linspace(-1, 1, nc_test)
-    y = torch.linspace(-1, 1, nc_test)
+# Генератор тестовых данных для Flow Mixing
+def spinn_test_generator_flow_mixing3d(nc_test, a=1.0, b=1.0):
+    t = torch.linspace(0, 1, nc_test)
+    x = torch.linspace(0, 1, nc_test)
+    y = torch.linspace(0, 1, nc_test)
     
     tm, xm, ym = torch.meshgrid(t, x, y, indexing='ij')
-    u_gt = _klein_gordon3d_exact_u(tm, xm, ym)
+    u_gt = _flow_mixing3d_exact_u(tm, xm, ym, a, b)
     
-    return t, x, y, u_gt, tm, xm, ym
-
+    return t, x, y, u_gt, tm, xm, ym, a, b
 
 def relative_l2(u, u_gt):
     return torch.norm(u - u_gt) / torch.norm(u_gt)
 
-def plot_klein_gordon3d(t, x, y, u, logger: Optional[ResultLogger] = None, name: str = "solution"):
+def plot_flow_mixing3d(t, x, y, u, logger: Optional[ResultLogger] = None, name: str = "solution"):
     # Преобразуем тензоры PyTorch в numpy массивы для визуализации
     t = t.detach().cpu().numpy().flatten()
     x = x.detach().cpu().numpy().flatten()
@@ -275,10 +255,10 @@ def plot_klein_gordon3d(t, x, y, u, logger: Optional[ResultLogger] = None, name:
     ax = fig.add_subplot(111, projection='3d')
     
     # Создаем scatter plot с нормализованными цветами
-    scatter = ax.scatter(t, x, y, c=u_norm, s=1, cmap='seismic', vmin=0, vmax=1)
+    scatter = ax.scatter(t, x, y, c=u_norm, s=1, cmap='viridis', vmin=0, vmax=1)
     
     # Настраиваем внешний вид
-    ax.set_title('U(t, x, y)', fontsize=20)
+    ax.set_title('Flow Mixing 3D', fontsize=20)
     ax.set_xlabel('t', fontsize=18, labelpad=10)
     ax.set_ylabel('x', fontsize=18, labelpad=10)
     ax.set_zlabel('y', fontsize=18, labelpad=10)
@@ -290,11 +270,17 @@ def plot_klein_gordon3d(t, x, y, u, logger: Optional[ResultLogger] = None, name:
     if logger is not None:
         logger.save_plot(fig, name)
     else:
-        plt.savefig('klein_gordon3d.png', dpi=300, bbox_inches='tight')
+        plt.savefig('flow_mixing3d.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-# Наследуем от базового класса BlackBoxOptimizer для решения нашей конкретной задачи Klein-Gordon
-class KleinGordonOptimizer(BlackBoxOptimizer):
+# Наследуем от базового класса BlackBoxOptimizer для решения Flow Mixing
+class FlowMixingOptimizer(BlackBoxOptimizer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Default flow parameters
+        self.a = 1.0  # x-direction flow parameter
+        self.b = 1.0  # y-direction flow parameter
+    
     def create_model(self, params: Dict) -> Tuple[SPINN, Dict]:
         """Creates a model with the given parameters."""
         # Extract architecture parameters
@@ -330,12 +316,16 @@ class KleinGordonOptimizer(BlackBoxOptimizer):
         return model, optimizer_config
     
     def generate_train_data(self, params: Dict) -> Tuple:
-        """Generate training data for Klein-Gordon equation."""
-        return spinn_train_generator_klein_gordon3d(params['NC'], seed=params['SEED'])
+        """Generate training data for Flow Mixing equation."""
+        a = params.get('a', self.a)
+        b = params.get('b', self.b)
+        return spinn_train_generator_flow_mixing3d(params['NC'], a, b, seed=params['SEED'])
     
     def generate_test_data(self, params: Dict) -> Tuple:
-        """Generate test data for Klein-Gordon equation."""
-        return spinn_test_generator_klein_gordon3d(params['NC_TEST'])
+        """Generate test data for Flow Mixing equation."""
+        a = params.get('a', self.a)
+        b = params.get('b', self.b)
+        return spinn_test_generator_flow_mixing3d(params['NC_TEST'], a, b)
 
     def train_model(self, model: SPINN, optimizer_params: Dict, train_data: Tuple, test_data: Tuple,
                    device: torch.device, n_epochs: int) -> float:
@@ -363,7 +353,7 @@ class KleinGordonOptimizer(BlackBoxOptimizer):
             )
         
         best_error = float('inf')
-        t, x, y, u_gt, tm, xm, ym = test_data
+        t, x, y, u_gt, tm, xm, ym, a, b = test_data
         
         # Очищаем историю обучения для нового trial
         self.training_history = []
@@ -371,7 +361,7 @@ class KleinGordonOptimizer(BlackBoxOptimizer):
         for epoch in range(1, n_epochs + 1):
             # AdamW step
             optimizer.zero_grad()
-            tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
+            tc, xc, yc, ti, xi, yi, ui, tb, xb, yb, ub, a, b = train_data
             
             # Ensure tensors require gradients
             if not tc.requires_grad:
@@ -381,7 +371,7 @@ class KleinGordonOptimizer(BlackBoxOptimizer):
             if not yc.requires_grad:
                 yc.requires_grad_(True)
             
-            loss_residual = criterion.residual_loss(tc, xc, yc, uc)
+            loss_residual = criterion.residual_loss(tc, xc, yc, a, b)
             loss_initial = criterion.initial_loss(ti, xi, yi, ui)
             loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
             loss = loss_residual + loss_initial + loss_boundary
@@ -442,7 +432,7 @@ class KleinGordonOptimizer(BlackBoxOptimizer):
 
 def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs):
     print("\n" + "="*50)
-    print("Starting SPINN optimization for Klein-Gordon equation")
+    print("Starting SPINN optimization for Flow Mixing 3D equation")
     print("="*50)
     print("\nConfiguration:")
     print(f"Algorithm: {algorithm.upper()}")
@@ -457,7 +447,7 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     
     # Create results logger with algorithm name in directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = f"/home/user/SPINN_PyTorch/results/klein_gordon3d/spinn_clear/{algorithm}_{timestamp}"
+    log_dir = f"/home/user/SPINN_PyTorch/results/flow_mixing3d/spinn_clear/{algorithm}_{timestamp}"
     logger = ResultLogger(log_dir)
     print(f"\nResults will be saved to: {logger.run_dir}")
     
@@ -477,10 +467,10 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     torch.manual_seed(kwargs['SEED'])
     
     # Create optimizer with selected algorithm
-    optimizer = KleinGordonOptimizer(
+    optimizer = FlowMixingOptimizer(
         n_trials=n_trials,
         timeout=timeout,
-        study_name="spinn_optimization_klein_gordon3d",
+        study_name="spinn_optimization_flow_mixing3d",
         logger=logger,
         algorithm=algorithm,
         algorithm_params=algorithm_params[algorithm],
@@ -521,12 +511,16 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     # Create optimizer
     optimizer = optim.AdamW(model.parameters(), lr=results['lr_adamw'])
     
-    train_data = spinn_train_generator_klein_gordon3d(kwargs['NC'], seed=kwargs['SEED'])
+    # Setup flow parameters
+    a = kwargs.get('a', 1.0)
+    b = kwargs.get('b', 1.0)
+    
+    train_data = spinn_train_generator_flow_mixing3d(kwargs['NC'], a, b, seed=kwargs['SEED'])
     train_data = [t.to(device) if isinstance(t, torch.Tensor) else 
                  [tensor.to(device) for tensor in t] if isinstance(t, list) else t 
                  for t in train_data]
     
-    t, x, y, u_gt, tm, xm, ym = spinn_test_generator_klein_gordon3d(kwargs['NC_TEST'])
+    t, x, y, u_gt, tm, xm, ym, a, b = spinn_test_generator_flow_mixing3d(kwargs['NC_TEST'], a, b)
     t, x, y = t.to(device), x.to(device), y.to(device)
     u_gt = u_gt.to(device)
     tm, xm, ym = tm.to(device), xm.to(device), ym.to(device)
@@ -537,7 +531,7 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
     for e in pbar:
         # AdamW step
         optimizer.zero_grad()
-        tc, xc, yc, uc, ti, xi, yi, ui, tb, xb, yb, ub = train_data
+        tc, xc, yc, ti, xi, yi, ui, tb, xb, yb, ub, a, b = train_data
         
         # Ensure tensors require gradients
         if not tc.requires_grad:
@@ -547,7 +541,7 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
         if not yc.requires_grad:
             yc.requires_grad_(True)
         
-        loss_residual = criterion.residual_loss(tc, xc, yc, uc)
+        loss_residual = criterion.residual_loss(tc, xc, yc, a, b)
         loss_initial = criterion.initial_loss(ti, xi, yi, ui)
         loss_boundary = criterion.boundary_loss(tb, xb, yb, ub)
         loss = loss_residual + loss_initial + loss_boundary
@@ -587,7 +581,7 @@ def main_with_algorithm(algorithm, n_trials, timeout, algorithm_params, **kwargs
                 if error < best_error:
                     best_error = error
                     u = u.reshape(tm.shape)
-                    plot_klein_gordon3d(tm, xm, ym, u, logger, f"solution_epoch_{e}")
+                    plot_flow_mixing3d(tm, xm, ym, u, logger, f"solution_epoch_{e}")
                     # Save best model
                     logger.save_model(model, f"best_model_epoch_{e}")
         
@@ -636,7 +630,9 @@ def main(NC, NI, NB, NC_TEST, SEED, EPOCHS):
         'NB': NB,
         'NC_TEST': NC_TEST,
         'SEED': SEED,
-        'EPOCHS': EPOCHS
+        'EPOCHS': EPOCHS,
+        'a': 1.0,  # Flow parameter in x-direction
+        'b': 1.0   # Flow parameter in y-direction
     }
     
     # Запускаем main с выбранным алгоритмом
@@ -646,7 +642,7 @@ if __name__ == '__main__':
     import argparse
     
     # Создаем парсер аргументов командной строки
-    parser = argparse.ArgumentParser(description='SPINN optimization for Klein-Gordon equation')
+    parser = argparse.ArgumentParser(description='SPINN optimization for Flow Mixing 3D equation')
     
     # Добавляем аргументы
     parser.add_argument('--algorithm', type=str, choices=['jade', 'lshade', 'nelder_mead', 'pso', 'grey_wolf', 'whales'],
@@ -663,11 +659,15 @@ if __name__ == '__main__':
                       help='Population size for population-based algorithms (JADE, L-SHADE, PSO, Grey Wolf, Whales)')
     parser.add_argument('--log-iter', type=int, default=500,
                       help='Iteration interval for saving plots and models')
+    parser.add_argument('--a', type=float, default=1.0,
+                      help='Flow parameter in x-direction')
+    parser.add_argument('--b', type=float, default=1.0,
+                      help='Flow parameter in y-direction')
     
     # Парсим аргументы
     args = parser.parse_args()
     
-    # Добавляем параметр LOG_ITER
+    # Добавляем параметр LOG_ITER и flow parameters
     params = {
         'NC': args.nc, 
         'NI': args.ni, 
@@ -675,7 +675,9 @@ if __name__ == '__main__':
         'NC_TEST': args.nc_test, 
         'SEED': args.seed, 
         'EPOCHS': args.epochs,
-        'LOG_ITER': args.log_iter
+        'LOG_ITER': args.log_iter,
+        'a': args.a,
+        'b': args.b
     }
     
     # Запускаем main с введенными параметрами

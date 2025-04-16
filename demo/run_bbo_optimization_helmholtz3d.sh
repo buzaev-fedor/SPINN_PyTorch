@@ -28,7 +28,7 @@ run_algorithm() {
         --nb 200 \
         --nc-test 20 \
         --seed 42 \
-        --epochs 1000 \
+        --epochs 10000 \
         --n-trials 150 \
         --population-size 32 \
         --wave-number "$wave_number" \
@@ -47,10 +47,10 @@ run_algorithm() {
 log_message "Starting Helmholtz optimization process for all algorithms"
 
 # List of algorithms to run
-ALGORITHMS=("jade" "lshade" "nelder_mead" "pso" "grey_wolf" "whales")
+ALGORITHMS=("whales")
 
 # Wave numbers to test
-WAVE_NUMBERS=(1.0 1.5 2.0)
+WAVE_NUMBERS=(1.0)
 
 # Run each algorithm with each wave number
 for algorithm in "${ALGORITHMS[@]}"; do
